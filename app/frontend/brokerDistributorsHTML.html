@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: 'Google Sans', Roboto, Arial, sans-serif;
+      padding: 10px;
+      color: #202124;
+      font-size: 14px;
+    }
+    h3 {
+      margin-top: 0;
+      color: #188038;
+      border-bottom: 2px solid #188038;
+      padding-bottom: 8px;
+      font-size: 16px;
+    }
+    h4 {
+      color: #188038;
+      margin-top: 15px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 8px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 14px;
+      color: #202124;
+    }
+    button {
+      background-color: #188038;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 5px;
+      transition: background-color 0.2s;
+      font-size: 14px;
+    }
+    button:hover {
+      background-color: #137333;
+    }
+    .items-list {
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      padding: 5px;
+      background: #fff;
+    }
+    .item {
+      padding: 6px 8px;
+      border-bottom: 1px solid #dadce0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .remove-btn {
+      background-color: #ea4335;
+      padding: 4px 8px;
+      border: none;
+      color: white;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .remove-btn:hover {
+      background-color: #d93025;
+    }
+  </style>
+</head>
+<body>
+  <h3>Manage Brokers and Distributors</h3>
+  <label for="sectionSelect">Select Category:</label>
+  <select id="sectionSelect">
+    <option value="Brokers">Brokers</option>
+    <option value="Distributors">Distributors</option>
+  </select>
+  <div id="itemsList" class="items-list">
+    <div>Loading...</div>
+  </div>
+  
+  <div id="managementSection">
+    <h4>Add New Item</h4>
+    <input type="text" id="newItemInput" placeholder="Enter new item name" />
+    <button id="addItemBtn" onclick="addNewItem()">Add</button>
+    
+    <h4>Update Item</h4>
+    <input type="text" id="oldItemInput" placeholder="Old item name" />
+    <input type="text" id="updatedItemInput" placeholder="New item name" />
+    <button id="updateItemBtn" onclick="updateItem()">Update</button>
+  </div>
+  
+  <script>
+    const BASE_URL = "http://15.207.59.232:8000/";
+    const sectionSelect = document.getElementById('sectionSelect');
+    const itemsList = document.getElementById('itemsList');
+    
+    function showLoading() {
+      itemsList.innerHTML = "<div>Loading...</div>";
+    }
+    
+    function loadItems() {
+      const section = sectionSelect.value;
+      showLoading();
+      google.script.run.withSuccessHandler(function(items) {
+        populateItems(items);
+      }).withFailureHandler(function(err) {
+        alert("Error: " + err.message);
+      }).getItemsFromBackend(section);
+    }
+    
+    function populateItems(items) {
+      itemsList.innerHTML = "";
+      if (!items || items.length === 0) {
+        itemsList.innerHTML = "<div>No items found.</div>";
+        return;
+      }
+      items.forEach(function(item) {
+        let div = document.createElement("div");
+        div.className = "item";
+        let span = document.createElement("span");
+        span.textContent = item;
+        let removeBtn = document.createElement("button");
+        removeBtn.className = "remove-btn";
+        removeBtn.textContent = "Remove";
+        removeBtn.onclick = function() {
+          if (confirm("Are you sure you want to remove " + item + "?")) {
+            deleteItemFromBackend(sectionSelect.value, item);
+          }
+        };
+        div.appendChild(span);
+        div.appendChild(removeBtn);
+        itemsList.appendChild(div);
+      });
+    }
+    
+    function addNewItem() {
+      const section = sectionSelect.value;
+      const newItem = document.getElementById("newItemInput").value.trim();
+      if (!newItem) {
+        alert("Please enter a value.");
+        return;
+      }
+      google.script.run.withSuccessHandler(loadItems)
+         .withFailureHandler(function(err) { alert("Error: " + err.message); })
+         .addNewItemToBackend(section, newItem);
+    }
+    
+    function updateItem() {
+      const section = sectionSelect.value;
+      const oldItem = document.getElementById("oldItemInput").value.trim();
+      const newItem = document.getElementById("updatedItemInput").value.trim();
+      if (!oldItem || !newItem) {
+        alert("Please fill both fields.");
+        return;
+      }
+      google.script.run.withSuccessHandler(loadItems)
+         .withFailureHandler(function(err) { alert("Error: " + err.message); })
+         .updateItemInBackend(section, oldItem, newItem);
+    }
+    
+    function deleteItemFromBackend(section, item) {
+      google.script.run.withSuccessHandler(loadItems)
+         .withFailureHandler(function(err) { alert("Error: " + err.message); })
+         .deleteItemFromBackend(section, item);
+    }
+    
+    sectionSelect.onchange = loadItems;
+    loadItems();
+  </script>
+</body>
+</html>
