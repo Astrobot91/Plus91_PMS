@@ -1,13 +1,16 @@
 import os
 import io
+import re
 import boto3
 import httpx
 import asyncio
-import datetime
+import openpyxl
+import multiprocessing
 import pandas as pd
-from datetime import datetime
+import polars as pl
+from functools import partial
+from datetime import datetime, date
 from dotenv import load_dotenv
-from app.scripts.data_fetchers.broker_data import BrokerData
 from app.logger import logger
 from typing import Dict
 
@@ -20,6 +23,7 @@ class ApiError(Exception):
     pass
 
 class KeynoteApi:
+
     def __init__(self):
         """Initialize the API client with base URL, headers, and API key."""
         self.BASE_URL = "https://backoffice.wizzer.in/shrdbms/dotnet/api/stansoft/"
@@ -152,6 +156,355 @@ class KeynoteApi:
             except Exception as e:
                 raise ApiError(f"Unexpected error: {str(e)}")
 
+
+class KeynoteDataProcessor:
+
+    def __init__(self):
+        """Initialize the Keynote data processor."""
+        self.bulk_ledger_location = "/home/admin/Plus91Backoffice/Plus91_Backend/data/bulk_ledgers"
+        self.bulk_holdings_location = "/home/admin/Plus91Backoffice/Plus91_Backend/data/bulk_holdings"
+        self.logger = logger
+
+    def fetch_ledger(self, ucc: str, from_date: str = None, to_date: str = None) -> dict:
+        """
+        For a given client code and optional date range, scans all bulk ledger Excel files in folder_path
+        and returns a consolidated Polars DataFrame (as a dictionary list) of transactions for the client.
+
+        Date strings must be in "yyyy-mm-dd" format. If only one date is provided then:
+          - If only from_date is provided, transactions from that date until the latest are returned.
+          - If only to_date is provided, transactions from the earliest date until to_date are returned.
+          - If both are omitted, the complete ledger is returned.
+        """
+        start_date = self._parse_optional_date(from_date, date.min)
+        end_date   = self._parse_optional_date(to_date, date.max)
+
+        files = [os.path.join(self.bulk_ledger_location, f) for f in os.listdir(self.bulk_ledger_location) if f.endswith(".xlsx")]
+        if not files:
+            raise FileNotFoundError(f"No Excel files found in folder {self.bulk_ledger_location}.")
+
+        pool = multiprocessing.Pool()
+        func = partial(self._process_file, client_code=ucc, start_date=start_date, end_date=end_date)
+        results = pool.map(func, files)
+        pool.close()
+        pool.join()
+
+        combined_rows = []
+        header_included = False
+        for res in results:
+            if res:
+                if not header_included:
+                    combined_rows.extend(res)
+                    header_included = True
+                else:
+                    combined_rows.extend(res[1:])  # Skip header in subsequent results
+
+        if not combined_rows:
+            self.logger.info(f"No ledger entries found for client code {ucc} in the provided date range.")
+            return {}
+
+        header = combined_rows[0]
+        data_rows = combined_rows[1:]
+        df = pl.DataFrame(data_rows, schema=header)
+        return df.to_dicts()
+
+    def _process_file(self, file_path, client_code, start_date, end_date):
+        """
+        Process a single bulk ledger file. Searches for client ledger blocks matching the given client_code
+        and returns a list of rows (as lists) that fall within the date range.
+        
+        Expects:
+          - A header row in the second row.
+          - Ledger entries starting from the third row.
+        """
+        result_rows = []
+        try:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+        except Exception as e:
+            self.logger.error(f"Could not load {file_path}: {e}")
+            return result_rows
+
+        sheet = wb.active
+        data = list(sheet.iter_rows(values_only=True))
+        if len(data) < 2:
+            return result_rows
+
+        header = list(data[1])
+        in_target_client = False
+        ledger_block = [header]
+        for row in data[2:]:
+            if row[0] is not None:
+                if self._is_client_header(row):
+                    if in_target_client:
+                        filtered = self._filter_block_by_date(ledger_block, start_date, end_date)
+                        if filtered and len(filtered) > 1:
+                            result_rows.extend(filtered)
+                        in_target_client = False
+                        ledger_block = [header]
+                    if re.search(r'\[' + re.escape(client_code) + r'\]', str(row[0])):
+                        in_target_client = True
+                        ledger_block = [header]
+                        ledger_block.append(list(row))
+                    else:
+                        in_target_client = False
+                        ledger_block = [header]
+                    continue
+
+            if in_target_client:
+                ledger_block.append(list(row))
+        if in_target_client and ledger_block:
+            filtered = self._filter_block_by_date(ledger_block, start_date, end_date)
+            if filtered and len(filtered) > 1:
+                result_rows.extend(filtered)
+        return result_rows
+
+    def _filter_block_by_date(self, ledger_block, start_date, end_date):
+        """
+        Given a ledger block (a list of rows with the first row as the header),
+        groups rows into "transaction blocks" (a main row with a valid date plus any detail rows)
+        and returns only those blocks where the main transaction date falls between start_date and end_date.
+        """
+        filtered = []
+        header = ledger_block[0]
+        filtered.append(header)
+
+        current_block = []
+        transaction_date = None
+
+        for row in ledger_block[1:]:
+            dt = self._parse_date_from_cell(row[0])
+            if dt is not None:
+                if current_block:
+                    if transaction_date and start_date <= transaction_date <= end_date:
+                        filtered.extend(current_block)
+                transaction_date = dt
+                current_block = [row]
+            else:
+                if current_block:
+                    current_block.append(row)
+        if current_block and transaction_date and start_date <= transaction_date <= end_date:
+            filtered.extend(current_block)
+        return filtered
+
+    def _parse_date_from_cell(self, cell_value):
+        """
+        Attempts to parse a cell value as a date in the "dd-MMM-yyyy" format.
+        Returns a datetime.date object if successful; otherwise, None.
+        """
+        if cell_value is None:
+            return None
+        try:
+            if isinstance(cell_value, date):
+                return cell_value
+            return datetime.strptime(str(cell_value).strip(), "%d-%b-%Y").date()
+        except Exception:
+            return None
+
+    def _is_client_header(self, row):
+        """
+        Determines if a row is a client header. A valid client header should have a non-empty
+        first cell that contains a code enclosed in square brackets (e.g. "Client Name [MN025]")
+        while all other cells are empty or whitespace.
+        """
+        if row[0] is None:
+            return False
+        text = str(row[0])
+        if '[' in text and ']' in text:
+            for cell in row[1:]:
+                if cell is not None and str(cell).strip() != "":
+                    return False
+            return True
+        return False
+
+    def _parse_optional_date(self, date_str: str, default: date) -> date:
+        """
+        If date_str is provided, parses it using _validate_date_str.
+        If not provided, returns the default date.
+        """
+        if date_str:
+            return self._validate_date_str(date_str)
+        return default
+
+    def _validate_date_str(self, date_str: str) -> date:
+        """
+        Validates and parses a date string in the "yyyy-mm-dd" format.
+        Raises ValueError if the date is invalid.
+        """
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+            return dt
+        except ValueError as e:
+            raise ValueError(f"Invalid date string '{date_str}': {e}")
+
+    def _extract_file_date(self, file_path: str) -> str:
+        """
+        Extracts the date from a bulk holdings file name.
+        Expected format: "Bulk Holdings_{dd-mm-yy}.xlsx" and converts dd-mm-yy to yyyy-mm-dd.
+        """
+        base_name = os.path.basename(file_path)
+        date_match = re.search(r'_(\d{2})-(\d{2})-(\d{2})', base_name)
+        if date_match:
+            day, month, year_short = date_match.groups()
+            full_year = "20" + year_short  # Assumes 21st century.
+            return f"{full_year}-{month}-{day}"
+        else:
+            raise ValueError("Could not extract a date from the file name.")
+
+    def _extract_client_blocks(self, file_path: str) -> dict:
+        """
+        Reads the bulk holdings Excel file and groups rows into client blocks.
+        Each block (a list of rows with the header as the first row) is keyed by the client code.
+        """
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        sheet = wb.active
+        all_rows = list(sheet.iter_rows(values_only=True))
+
+        header = None
+        header_index = None
+        for i, row in enumerate(all_rows):
+            if any(cell is not None and str(cell).strip() != "" for cell in row):
+                header = list(row)
+                header_index = i
+                break
+        if header is None:
+            raise ValueError("No header row found in the bulk holdings file.")
+
+        client_blocks = {}
+        current_client_code = None
+        current_block = None
+
+        for row in all_rows[header_index+1:]:
+            if row[0] is not None and ('[' in str(row[0]) and ']' in str(row[0])):
+                if current_client_code and current_block:
+                    client_blocks[current_client_code] = current_block
+                match = re.search(r'\[(.*?)\]', str(row[0]))
+                if match:
+                    current_client_code = match.group(1).strip()
+                else:
+                    current_client_code = None
+                current_block = [header]
+                current_block.append(list(row))
+            else:
+                if current_block is not None:
+                    current_block.append(list(row))
+        if current_client_code and current_block:
+            client_blocks[current_client_code] = current_block
+
+        return client_blocks
+
+    def _process_and_upload_client_block(self, args):
+        """
+        Processes a single client block from a bulk holdings file: selects and renames columns,
+        cleans the trading symbol and uploads the result (as an Excel file) to S3.
+
+        The S3 key follows the structure:
+          PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{client_code}/holdings/{file_date}.xlsx
+        """
+        client_code, block, file_date_str, bucket_name = args
+
+        desired_cols = ["Scrip", "ISIN", "Margin_x000D_\nQuantity", "Market_x000D_\nValue"]
+        rename_mapping = {
+            "Scrip": "trading_symbol",
+            "ISIN": "isin",
+            "Margin_x000D_\nQuantity": "quantity",
+            "Market_x000D_\nValue": "market_value"
+        }
+
+        try:
+            df = pd.DataFrame(block[1:], columns=block[0])
+        except Exception as ex:
+            self.logger.error(f"Error creating DataFrame for client {client_code}: {ex}")
+            return
+
+        df.columns = [str(col).strip() for col in df.columns]
+        missing = [col for col in desired_cols if col not in df.columns]
+        if missing:
+            self.logger.warning(f"For client {client_code} the following columns are missing: {missing}. Skipping.")
+            return
+
+        df = df[desired_cols].copy()
+        df.rename(columns=rename_mapping, inplace=True)
+
+        def clean_symbol(symbol):
+            if pd.isna(symbol):
+                return symbol
+            cleaned = re.sub(r'\s+(MF|EQ|NO)$', '', str(symbol)).strip()
+            return cleaned
+
+        df["trading_symbol"] = df["trading_symbol"].apply(clean_symbol)
+        df = df[df["isin"].notna()]
+        df = df.groupby('trading_symbol', as_index=False).agg({
+            'quantity': 'sum',
+            'market_value': 'sum'
+        })
+
+        output_buffer = io.BytesIO()
+        try:
+            with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False)
+            output_buffer.seek(0)
+        except Exception as e:
+            self.logger.error(f"Error writing Excel for client {client_code}: {e}")
+            return
+
+        s3_key = f"PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{client_code}/holdings/{file_date_str}.xlsx"
+        try:
+            s3_client = boto3.client('s3')
+            s3_client.upload_fileobj(output_buffer, bucket_name, s3_key)
+            self.logger.info(f"Uploaded file for client {client_code} to s3://{bucket_name}/{s3_key}")
+        except Exception as e:
+            self.logger.error(f"Error uploading file for client {client_code} to S3: {e}")
+        output_buffer.close()
+
+    def process_bulk_holdings_to_s3(self, file_path: str, bucket_name: str = "plus91backoffice"):
+        """
+        Processes a single bulk holdings Excel file by:
+          1. Extracting the file date from its name (converted to yyyy-mm-dd).
+          2. Splitting the file into client blocks.
+          3. Processing each client block (selecting, renaming, cleaning columns)
+             and uploading each as an Excel file to S3 in the proper folder structure.
+             
+        Uses multiprocessing to process client blocks concurrently.
+        """
+        file_date_str = self._extract_file_date(file_path)
+        self.logger.info(f"Extracted file date: {file_date_str} from {file_path}")
+
+        client_blocks = self._extract_client_blocks(file_path)
+        if not client_blocks:
+            self.logger.info("No client blocks found in the bulk holdings file.")
+            return
+
+        args_list = []
+        for client_code, block in client_blocks.items():
+            args_list.append((client_code, block, file_date_str, bucket_name))
+
+        with multiprocessing.Pool() as pool:
+            pool.map(self._process_and_upload_client_block, args_list)
+
+        self.logger.info("Processing of bulk holdings file complete.")
+
+    def process_all_bulk_holdings_to_s3(self, bucket_name: str = "plus91backoffice"):
+        """
+        Scans the given folder for bulk holdings Excel files that match the naming format:
+          Bulk Holdings_{dd-mm-yy}.xlsx
+        For each matching file, processes it such that individual client holding files are uploaded to S3
+        under the folder structure:
+          PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{client_code}/holdings/{yyyy-mm-dd}.xlsx
+        """
+        file_pattern = r'^Bulk Holdings_\d{2}-\d{2}-\d{2}\.xlsx$'
+        files = [f for f in os.listdir(self.bulk_holdings_location) if re.match(file_pattern, f)]
+        if not files:
+            self.logger.info(f"No bulk holdings files found in folder {self.bulk_holdings_location} matching the required naming format.")
+            return
+
+        for filename in files:
+            full_path = os.path.join(self, filename)
+            self.logger.info(f"Processing bulk holdings file: {full_path}")
+            try:
+                self.process_bulk_holdings_to_s3(full_path, bucket_name)
+            except Exception as e:
+                self.logger.error(f"Error processing file {full_path}: {e}")
+
+
 class ZerodhaDataFetcher:
     def __init__(self, bucket_name="plus91backoffice", 
                  base_prefix="PLUS91_PMS/ledgers_and_holdings/zerodha/single_accounts/"):
@@ -277,10 +630,10 @@ if __name__ == "__main__":
     keynote = KeynoteApi()
 
 
-    holdingsexample = asyncio.run(keynote.fetch_holding(for_date="2023-01-31", ucc="SG102"))
-    df = pd.DataFrame(holdingsexample)
-    print(df)
+    # holdingsexample = asyncio.run(keynote.fetch_holding(for_date="2023-01-31", ucc="SG102"))
+    # df = pd.DataFrame(holdingsexample)
+    # print(df)
 
-    # ledgerexample = asyncio.run(keynote.fetch_ledger(from_date="2022-11-30", to_date="2025-03-19", ucc="SG102"))
-    # ledger_df = pd.DataFrame(ledgerexample)
-    # ledger_df.to_csv("LEDGER_SG102.csv")
+    ledgerexample = asyncio.run(keynote.fetch_ledger(from_date="2022-04-01", to_date="2025-03-28", ucc="MK100"))
+    ledger_df = pd.DataFrame(ledgerexample)
+    ledger_df.to_csv("LEDGER_MK100_1.csv")

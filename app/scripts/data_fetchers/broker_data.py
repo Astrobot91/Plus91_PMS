@@ -4,7 +4,7 @@ from typing import List, Dict
 class BrokerData:
     """Class containing static methods to interact with the Upstox API."""
     
-    BASE_URL = "http://13.127.138.190:8000/api/v1/upstox/"
+    BASE_URL = "http://0.0.0.0:8001/api/v1/"
     
     @staticmethod
     def get_master_data() -> Dict:
@@ -18,7 +18,8 @@ class BrokerData:
             Exception: If the API call fails, with the status code and error message.
         """
         url = f"{BrokerData.BASE_URL}master-data"
-        response = requests.get(url)
+        headers = {"Content-Type": "application/json"}
+        response = requests.get(url, params={"broker_type": "upstox"}, headers=headers)
         if response.status_code != 200:
             raise Exception(f"Failed to get master data: {response.status_code} - {response.text}")
         return response.json()

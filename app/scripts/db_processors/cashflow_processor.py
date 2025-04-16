@@ -276,13 +276,16 @@ class CashflowProcessor:
             return None
 
     def get_month_end_balances(self, ledger_df: pd.DataFrame, date_col, balance_col, month_ends, broker_name):
+        print("LEDGER_DF: ", ledger_df)
+        ledger_df.to_csv("MK100_LEDGER.csv")
         ledger_df[date_col] = pd.to_datetime(ledger_df[date_col])
         ledger_df = ledger_df.sort_values(by=date_col)
         month_ends = [pd.to_datetime(me) for me in month_ends]
-
+        print(f"MONTHENDS: {month_ends}")
         dates = ledger_df[date_col].values
         dates = [pd.Timestamp(date) for date in dates]
         balances = ledger_df[balance_col].values
+        print(balances)
 
         result = {}
         for monthend_date in month_ends:

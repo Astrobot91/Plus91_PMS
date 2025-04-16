@@ -31,7 +31,7 @@ def combine_python_files(start_path: str, output_file: str) -> None:
                 
                 # Process Python files
                 for file in files:
-                    if file.endswith('.py'):
+                    # if file.endswith('.py'):
                         file_path = os.path.join(root, file)
                         relative_path = os.path.relpath(file_path, start_path)
                         
@@ -64,7 +64,7 @@ def combine_python_files(start_path: str, output_file: str) -> None:
 
 if __name__ == "__main__":
     current_dir = os.getcwd()
-    current_dir = "/home/admin/Plus91Backoffice/plus91_management"
+    current_dir = "/home/admin/Plus91Backoffice/plus91_management/app/models"
     output_file = "combined_codebase.txt"
     
     combine_python_files(current_dir, output_file)

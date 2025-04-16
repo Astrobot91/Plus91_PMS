@@ -31,7 +31,7 @@ async def runner():
                     "broker_code": "MK100",
                     "broker_name": "keynote",
                     "acc_start_date": "2022-04-01"
-                },
+                }
                 # {
                 #     "account_id": "ACC_000313",
                 #     "broker_code": "MM5525",

@@ -71,7 +71,8 @@ class JointAccount(Base):
         "AccountActualPortfolioException",
         primaryjoin="and_(JointAccount.joint_account_id == foreign(AccountActualPortfolioException.owner_id), "
                     "AccountActualPortfolioException.owner_type == 'joint')",
-        back_populates="joint_account"
+        back_populates="joint_account",
+        overlaps="actual_portfolio_exceptions"
     )
 
     joint_account_mappings = relationship("JointAccountMapping", back_populates="joint_account")

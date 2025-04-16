@@ -40,6 +40,9 @@ class CashflowProgressionProcessor:
             portfolio_values, month_ends = await self.get_portfolio_values(account_id, 'single')
             cash_balances = await self.cashflow_processor.get_month_end_cash_balances(account, month_ends)
 
+            print(f"PORTFOLIO VALUES: {portfolio_values}")
+            print(f"CASH BALANCES: {cash_balances}")
+
             data = []
             for month_end in month_ends:
                 portfolio_value = portfolio_values.get(month_end, 0)
@@ -378,7 +381,6 @@ class CashflowProgressionProcessor:
                 ]['cashflow']
 
                 next_month_cashflow_sum = next_month_cashflow.sum()
-                # has_no_cashflows = (next_month_cashflow == 0).all()
 
                 if next_month_cashflow_sum == 0:
                     cashflow_progression_df.loc[
@@ -396,6 +398,7 @@ class CashflowProgressionProcessor:
                     cashflow_progression_df['event_date'] == last_date,
                     'portfolio_plus_cash'
                 ] = 0
+
             last_row = cashflow_progression_df.tail(1).copy()
             oldest_date = cashflow_progression_df['event_date'].min()
             oldest_year = oldest_date.year
@@ -406,26 +409,49 @@ class CashflowProgressionProcessor:
             
             first_month = cashflow_progression_df[first_month_mask]
             first_month_cashflow_sum = first_month['cashflow'].sum()
-
-            cashflow_progression_df['portfolio_plus_cash'].iloc[0] = first_month_cashflow_sum
             
             first_portfolio_idx = cashflow_progression_df[cashflow_progression_df['portfolio'] != 0].index[0]
             first_portfolio_date = cashflow_progression_df.loc[first_portfolio_idx, 'event_date']
-
             cashflow_before = cashflow_progression_df.loc[:first_portfolio_idx - 1]
-            first_cashflow_idx = cashflow_before[cashflow_before['cashflow'] != 0].index[-1]
-            first_cashflow_date = cashflow_progression_df.loc[first_cashflow_idx, 'event_date']
+            non_zero_cashflows = cashflow_before[cashflow_before['cashflow'] != 0]
 
-            total_cashflow = cashflow_before['cashflow'].sum()
-            cashflow_progression_df = cashflow_progression_df.loc[first_cashflow_idx:]
-            cashflow_progression_df.loc[first_cashflow_idx, 'cashflow'] = total_cashflow
-            cashflow_progression_df = cashflow_progression_df.reset_index(drop=True)
-            cashflow_progression_df['portfolio_plus_cash'].iloc[0] += cashflow_progression_df['cashflow'].iloc[0]
-            cashflow_progression_df = cashflow_progression_df[cashflow_progression_df['portfolio_plus_cash'] != 0]
+            if not non_zero_cashflows.empty:
+                first_cashflow_idx = non_zero_cashflows.index[-1]
+                first_cashflow_date = cashflow_progression_df.loc[first_cashflow_idx, 'event_date']
+                total_cashflow = cashflow_before['cashflow'].sum()
+                new_cashflow_progression_df = cashflow_progression_df.loc[first_cashflow_idx:].copy()
+                new_cashflow_progression_df.loc[first_cashflow_idx, 'cashflow'] = total_cashflow
+            
+            else:
+                first_cashflow_idx = first_portfolio_idx
+                first_cashflow_date = first_portfolio_date
+                total_cashflow = 0
+                new_cashflow_progression_df = cashflow_progression_df.loc[first_cashflow_idx:].copy()
+                new_cashflow_progression_df.loc[first_cashflow_idx, 'cashflow'] = total_cashflow
+
+            new_cashflow_progression_df = new_cashflow_progression_df.reset_index(drop=True)
+            
+            first_row = new_cashflow_progression_df.iloc[0]
+            if first_row['portfolio_plus_cash'] == 0 and first_row['cashflow'] != 0:
+                new_cashflow_progression_df.loc[0, 'portfolio_plus_cash'] = first_row['cashflow']
+            elif first_row['portfolio_plus_cash'] != 0:
+                next_month_start = first_row['event_date'].replace(day=1) + pd.DateOffset(months=1)
+                next_month_end = next_month_start + pd.DateOffset(months=1) - pd.DateOffset(days=1)
+                next_month_cashflow = cashflow_progression_df[
+                    (cashflow_progression_df['event_date'] >= next_month_start) &
+                    (cashflow_progression_df['event_date'] <= next_month_end)
+                ]['cashflow'].sum()
+
+                expected_ppc = first_row['portfolio'] + next_month_cashflow
+                if abs(first_row['portfolio_plus_cash'] - expected_ppc) > 1e-2:
+                    new_cashflow_progression_df.loc[0, 'portfolio_plus_cash'] = expected_ppc
+            
+            cashflow_progression_df = new_cashflow_progression_df[new_cashflow_progression_df['portfolio_plus_cash'] != 0]
             cashflow_progression_df = pd.concat([cashflow_progression_df, last_row], ignore_index=True)
 
             if cashflow_progression_df.empty:
                 return pd.DataFrame(columns=["start_value", "start_date", "end_value", "end_date", "returns", "returns_1"]), 1
+            
             start_value_list = list(cashflow_progression_df['portfolio_plus_cash'])
             end_value_list = list(cashflow_progression_df['portfolio'])
             start_date_list = list(cashflow_progression_df['event_date'])
@@ -488,9 +514,8 @@ class CashflowProgressionProcessor:
                     cashflow_progression_df['event_date'] == last_date,
                     'portfolio_plus_cash'
                 ] = 0  
-
+            
             last_row = cashflow_progression_df.tail(1).copy()
-
             oldest_date = cashflow_progression_df['event_date'].min()
             oldest_year = oldest_date.year
             oldest_month = oldest_date.month
@@ -500,19 +525,54 @@ class CashflowProgressionProcessor:
             
             first_month = cashflow_progression_df[first_month_mask]
             first_month_cashflow_sum = first_month['cashflow'].sum()
-            print(cashflow_progression_df)
-            cashflow_progression_df['portfolio_plus_cash'].iloc[0] = first_month_cashflow_sum + cashflow_progression_df['portfolio'].iloc[0]
-            cashflow_progression_df['portfolio_plus_cash'].iloc[-1] = cashflow_progression_df['portfolio'].iloc[-1]
-            cashflow_progression_df = cashflow_progression_df[cashflow_progression_df['portfolio_plus_cash'] != 0]
             
+            first_portfolio_idx = cashflow_progression_df[cashflow_progression_df['portfolio'] != 0].index[0]
+            first_portfolio_date = cashflow_progression_df.loc[first_portfolio_idx, 'event_date']
+            cashflow_before = cashflow_progression_df.loc[:first_portfolio_idx - 1]
+            non_zero_cashflows = cashflow_before[cashflow_before['cashflow'] != 0]
+
+            if not non_zero_cashflows.empty:
+                first_cashflow_idx = non_zero_cashflows.index[-1]
+                first_cashflow_date = cashflow_progression_df.loc[first_cashflow_idx, 'event_date']
+                total_cashflow = cashflow_before['cashflow'].sum()
+                new_cashflow_progression_df = cashflow_progression_df.loc[first_cashflow_idx:].copy()
+                new_cashflow_progression_df.loc[first_cashflow_idx, 'cashflow'] = total_cashflow
+            
+            else:
+                first_cashflow_idx = first_portfolio_idx
+                first_cashflow_date = first_portfolio_date
+                total_cashflow = 0
+                new_cashflow_progression_df = cashflow_progression_df.loc[first_cashflow_idx:].copy()
+                new_cashflow_progression_df.loc[first_cashflow_idx, 'cashflow'] = total_cashflow
+
+            new_cashflow_progression_df = new_cashflow_progression_df.reset_index(drop=True)
+            
+            first_row = new_cashflow_progression_df.iloc[0]
+            if first_row['portfolio_plus_cash'] == 0 and first_row['cashflow'] != 0:
+                new_cashflow_progression_df.loc[0, 'portfolio_plus_cash'] = first_row['cashflow']
+            elif first_row['portfolio_plus_cash'] != 0:
+                next_month_start = first_row['event_date'].replace(day=1) + pd.DateOffset(months=1)
+                next_month_end = next_month_start + pd.DateOffset(months=1) - pd.DateOffset(days=1)
+                next_month_cashflow = cashflow_progression_df[
+                    (cashflow_progression_df['event_date'] >= next_month_start) &
+                    (cashflow_progression_df['event_date'] <= next_month_end)
+                ]['cashflow'].sum()
+
+                expected_ppc = first_row['portfolio'] + next_month_cashflow
+                if abs(first_row['portfolio_plus_cash'] - expected_ppc) > 1e-2:
+                    new_cashflow_progression_df.loc[0, 'portfolio_plus_cash'] = expected_ppc
+            
+            cashflow_progression_df = new_cashflow_progression_df[new_cashflow_progression_df['portfolio_plus_cash'] != 0]
+            cashflow_progression_df = pd.concat([cashflow_progression_df, last_row], ignore_index=True)
+
             if cashflow_progression_df.empty:
                 return pd.DataFrame(columns=["start_value", "start_date", "end_value", "end_date", "returns", "returns_1"]), 1
-
+            
             start_value_list = list(cashflow_progression_df['portfolio_plus_cash'])
             end_value_list = list(cashflow_progression_df['portfolio'])
             start_date_list = list(cashflow_progression_df['event_date'])
             end_date_list = list(cashflow_progression_df['event_date'])
-            
+
             start_value_list.pop(-1)
             end_value_list.pop(0)
             start_date_list.pop(-1)
@@ -528,7 +588,7 @@ class CashflowProgressionProcessor:
             abs_twrr_df = pd.DataFrame(twrr_data)
             abs_twrr_df['returns'] = (abs_twrr_df['end_value'] / abs_twrr_df['start_value']) - 1
             abs_twrr_df['returns_1'] = abs_twrr_df['returns'] + 1
-            absolute_twrr = ((abs_twrr_df['returns_1'].prod()) - 1)  
+            absolute_twrr = ((abs_twrr_df['returns_1'].prod()) - 1)
             return abs_twrr_df, absolute_twrr
 
         else:

@@ -68,7 +68,8 @@ class SingleAccount(Base):
         "AccountActualPortfolioException",
         primaryjoin="and_(SingleAccount.single_account_id == foreign(AccountActualPortfolioException.owner_id), "
                     "AccountActualPortfolioException.owner_type == 'single')",
-        back_populates="single_account"
+        back_populates="single_account",
+        overlaps="actual_portfolio_exceptions"
     )
 
     client = relationship("Client", back_populates="account")

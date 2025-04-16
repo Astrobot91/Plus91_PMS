@@ -4,7 +4,7 @@ from io import BytesIO
 import pandas as pd
 from datetime import datetime, timedelta
 from app.scripts.data_fetchers.broker_data import BrokerData
-from app.scripts.data_fetchers.portfolio_data import KeynoteApi, ZerodhaDataFetcher
+from app.scripts.data_fetchers.portfolio_data import KeynoteDataProcessor, ZerodhaDataFetcher
 from typing import Dict, Optional, Tuple
 from app.logger import logger
 
@@ -14,54 +14,92 @@ upstox_master_df = pd.DataFrame(master_data["data"]) if master_data and "data" i
 
 
 class KeynoteDataTransformer:
+
     def __init__(self):
         """Initialize with KeynoteApi instance."""
-        self.keynote_portfolio = KeynoteApi()
+        self.keynote_portfolio = KeynoteDataProcessor()
+        self.fees = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_fees.xlsx")
+        self.buybacks = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_buybacks.xlsx")
+        self.share_transfers = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_share_transfers.xlsx")
+
 
     async def transform_ledger_to_cashflow(
             self,
             broker_code: str,
-            from_date: str,
-            to_date: str
+            from_date: str = None,
+            to_date: str = None
     ) -> Optional[Dict]:
         """Transform ledger data into cashflow format."""
-        ledger_data = await self.keynote_portfolio.fetch_ledger(
-            ucc=broker_code,
-            from_date=from_date,
-            to_date=to_date
-        )
-        if not ledger_data:
-            logger.warning(f"Ledger data for {broker_code}, from: {from_date}, to: {to_date} was not found.")
-            return None
-
-        ledger_df = pd.DataFrame(ledger_data)
-        if ledger_df.empty:
-            logger.warning(f"Ledger data for {broker_code}, from: {from_date}, to: {to_date} is empty.")
-            return None
-
-        ledger_df_slice = ledger_df[ledger_df["type"].isin(["C"])]
-        ledger_df_open_bal = ledger_df[ledger_df["type"].isin(["A"])]
-
-        if ledger_df.empty:
-            logger.warning(f"No cash transactions found in ledger data for {broker_code}.")
-            return None
-
         try:
-            cashflow_df = pd.DataFrame()
-            cashflow_df["event_date"] = pd.to_datetime(ledger_df_slice["vrdt"]).dt.date
-            cashflow_df["cashflow"] = ledger_df_slice["amtcr"].where(
-                ledger_df_slice["amtcr"] > 0, -ledger_df_slice["amtdr"]
-            ).astype(float)
-            cashflow_df["tag"] = ""
+            ledger_data = self.keynote_portfolio.fetch_ledger(
+                ucc=broker_code,
+                from_date=from_date,
+                to_date=to_date
+            )
+            if not ledger_data:
+                logger.warning(f"Ledger data for {broker_code}, from: {from_date}, to: {to_date} was not found.")
+                return None
 
-            ledger_df['vrdt'] = pd.to_datetime(ledger_df['vrdt'])
-            latest_row = ledger_df.sort_values('vrdt').iloc[-1]
-            latest_balance = float(latest_row['runbal'])
-            cashflow_df = cashflow_df.reset_index(drop=True)
-            return cashflow_df.to_dict()
+            ledger_df = pd.DataFrame(ledger_data)
+            if ledger_df.empty:
+                logger.warning(f"Ledger data for {broker_code}, from: {from_date}, to: {to_date} is empty.")
+                return None
+            
+            ledger_df.columns = [col.replace("_x000D_", "").replace("\n", "").strip() for col in ledger_df.columns]
+            ledger_df = ledger_df.rename(columns={
+                'VoucherDate': 'event_date',
+                'AmountDebit': 'debit',
+                'AmountCredit': 'credit',
+                'RunningBalance': 'runbal',
+                'DrCr': 'type',
+                'EntryDetails': 'narr',
+                'Sett#': 'settl_no',
+                'Branch': 'branch',
+                'column_8': 'notes'
+            })
+            
+            ledger_df = ledger_df[
+                ledger_df['narr'].fillna('').str.startswith('AXIS BANK')
+            ][["event_date", "debit", "credit"]]
+
+            ledger_df['event_date'] = pd.to_datetime(ledger_df['event_date'], format='%d-%b-%Y', errors='coerce').dt.date
+            ledger_df['cashflow'] = ledger_df['credit'].fillna(0) - ledger_df['debit'].fillna(0)
+            ledger_df['tag'] = ""
+            ledger_df = ledger_df[['event_date', 'cashflow', 'tag']].reset_index(drop=True)
+
+            fees_data = self.fees[self.fees['broker_code'] == broker_code]
+            if not fees_data.empty:
+                fees_data['event_date'] = pd.to_datetime(fees_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                fees_data['tag'] = "fees"
+                fees_data = fees_data[["event_date", "cashflow", "tag"]]
+            else:
+                fees_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+
+            buybacks_data = self.buybacks[self.buybacks['broker_code'] == broker_code]
+            if not buybacks_data.empty:
+                buybacks_data['event_date'] = pd.to_datetime(buybacks_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                buybacks_data['cashflow'] = -buybacks_data['cashflow']
+                buybacks_data['tag'] = "buyback"
+                buybacks_data = buybacks_data[["event_date", "cashflow", "tag"]]
+            else:
+                buybacks_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+
+            share_transfers_data = self.share_transfers[self.share_transfers['broker_code'] == broker_code]
+            if not share_transfers_data.empty:
+                share_transfers_data['event_date'] = pd.to_datetime(share_transfers_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                share_transfers_data['tag'] = "share transfer"
+                share_transfers_data = share_transfers_data[["event_date", "cashflow", "tag"]]
+            else:
+                share_transfers_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+
+            ledger_df = pd.concat(
+                [ledger_df, fees_data, buybacks_data, share_transfers_data], ignore_index=True
+            ).sort_values(by='event_date')
+            return ledger_df.to_dict()
         except Exception as e:
             logger.error(f"Error transforming ledger to cashflow for {broker_code}: {e}")
             return None
+        
 
     async def transform_holdings_to_actual_portfolio(
             self,
@@ -80,74 +118,6 @@ class KeynoteDataTransformer:
         Returns:
             Optional[Dict]: A dictionary with aggregated holdings data or None if no data is found.
         """
-        holdings_data = await self.keynote_portfolio.fetch_holding(
-            ucc=broker_code,
-            for_date=for_date
-        )
-        if not holdings_data:
-            logger.warning(f"Holdings for {broker_code} at date: {for_date} could not be found.")
-        else:
-            holdings_df = pd.DataFrame(holdings_data)
-            if not holdings_df.empty and not for_date.startswith("2024-03"):
-                try:
-                    holdings_df["quantity"] = (holdings_df["holding"] / holdings_df["closerate"]).round(2)
-                    holdings_df = holdings_df[["isincd", "quantity", "holding"]]
-                    holdings_df = holdings_df.rename(columns={
-                        "isincd": "isin",
-                        "holding": "market_value"
-                    })
-                    slice_master_df = upstox_master_df[upstox_master_df["segment"].isin(["NSE_EQ", "BSE_EQ"])]
-                    holdings_df = holdings_df.merge(slice_master_df[["isin", "trading_symbol"]], on="isin", how="left")
-                    holdings_df["trading_symbol"] = holdings_df["trading_symbol"].fillna(holdings_df["isin"]).drop_duplicates()
-                    holdings_df = holdings_df.groupby("trading_symbol")[["quantity", "market_value"]].sum().reset_index()
-                    
-                    # upstox_master_df_slice = upstox_master_df[
-                    #     (upstox_master_df["exchange"].isin(["NSE", "BSE"])) &
-                    #     (upstox_master_df["instrument_type"] == "EQ")
-                    # ][["trading_symbol", "exchange", "exchange_token", "instrument_type"]]
-                    
-                    # upstox_master_df_slice_sorted = upstox_master_df_slice.sort_values(
-                    #     by=["trading_symbol", "exchange"],
-                    #     ascending=[True, True]
-                    # )
-                    # upstox_master_df_slice = upstox_master_df_slice_sorted.drop_duplicates(
-                    #     subset="trading_symbol", keep="first"
-                    # )
-                    # mapping_data = upstox_master_df_slice[
-                    #     upstox_master_df_slice["trading_symbol"].isin(list(holdings_df['trading_symbol']))
-                    # ].reset_index()
-
-                    # to_date = pd.to_datetime(for_date)
-                    # from_date = to_date - timedelta(days=10)
-                    # for index, data in mapping_data.iterrows():
-                    #     try:
-                    #         print(data)
-                    #         hist_data = broker_data.historical_data(
-                    #             instrument={
-                    #                 "exchange": data['exchange'],
-                    #                 "exchange_token": data['exchange_token'],
-                    #                 "instrument_type": data['instrument_type'],
-                    #                 "interval": "day",
-                    #                 "from_date": str(from_date.date()),
-                    #                 "to_date": str(to_date.date())
-                    #             }
-                    #         )
-                    #         hist_df = pd.DataFrame(hist_data['data'])
-                    #         closest_row = hist_df.iloc[(hist_df['datetime'] - pd.to_datetime(for_date)).abs().argsort()[0]]
-                    #         print(closest_row)
-                            
-                    #         time.sleep(1)
-
-                    #     except Exception as e:
-                    #         print(f"Historical Data not found for {data}")
-
-                    logger.info(f"Data fetched from API for {broker_code} on {for_date}")
-                    return holdings_df.to_dict()
-                except Exception as e:
-                    logger.error(f"Error transforming API holdings for {broker_code}: {e}")
-
-        logger.info(f"No data from API or transformation failed for {broker_code} on {for_date}. Falling back to S3...")
-
         bucket_name = 'plus91backoffice'
         prefix = f"PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{broker_code}/holdings/"
 
@@ -184,9 +154,14 @@ class KeynoteDataTransformer:
 
 
 class ZerodhaDataTransformer:
+
     def __init__(self):
         """Initialize with ZerodhaDataFetcher instance."""
         self.zerodha_portfolio = ZerodhaDataFetcher()
+        self.fees = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_fees.xlsx")
+        self.buybacks = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_buybacks.xlsx")
+        self.share_transfers = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_share_transfers.xlsx")
+
 
     async def transform_ledger_to_cashflow(
             self,
@@ -219,9 +194,38 @@ class ZerodhaDataTransformer:
             outflow_df = outflow_df[outflow_df['cashflow'] != 0]
 
             cashflow_df = pd.concat([inflow_df, outflow_df], ignore_index=True)
-            cashflow_df["event_date"] = pd.to_datetime(cashflow_df["event_date"]).dt.date
+            cashflow_df["event_date"] = pd.to_datetime(cashflow_df["event_date"], format='%Y-%m-%d', errors='coerce').dt.date
             cashflow_df["cashflow"] = cashflow_df["cashflow"].astype(float)
             cashflow_df["tag"] = ""
+
+            fees_data = self.fees[self.fees['broker_code'] == broker_code]
+            if not fees_data.empty:
+                fees_data['event_date'] = pd.to_datetime(fees_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                fees_data['tag'] = "fees"
+                fees_data = fees_data[["event_date", "cashflow", "tag"]]
+            else:
+                fees_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+
+            buybacks_data = self.buybacks[self.buybacks['broker_code'] == broker_code]
+            if not buybacks_data.empty:
+                buybacks_data['event_date'] = pd.to_datetime(buybacks_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                buybacks_data['cashflow'] = -buybacks_data['cashflow']
+                buybacks_data['tag'] = "buyback"
+                buybacks_data = buybacks_data[["event_date", "cashflow", "tag"]]
+            else:
+                buybacks_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+
+            share_transfers_data = self.share_transfers[self.share_transfers['broker_code'] == broker_code]
+            if not share_transfers_data.empty:
+                share_transfers_data['event_date'] = pd.to_datetime(share_transfers_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                share_transfers_data['tag'] = "share transfer"
+                share_transfers_data = share_transfers_data[["event_date", "cashflow", "tag"]]
+            else:
+                share_transfers_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+
+            cashflow_df = pd.concat(
+                [cashflow_df, fees_data, buybacks_data, share_transfers_data], ignore_index=True
+            ).sort_values(by='event_date')
 
             ledger_df['Posting Date'] = pd.to_datetime(ledger_df['Posting Date'])
             latest_row = ledger_df.sort_values('Posting Date').iloc[-1]
