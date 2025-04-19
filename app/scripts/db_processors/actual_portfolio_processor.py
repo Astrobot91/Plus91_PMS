@@ -1,4 +1,6 @@
+import re
 import sys
+import boto3
 import asyncio
 import logging
 from datetime import datetime
@@ -23,6 +25,8 @@ class ActualPortfolioProcessor:
             zerodha_transformer: ZerodhaDataTransformer
     ):
         self.db = db
+        self.s3 = boto3.client('s3')
+        self.bucket_name = 'plus91backoffice'
         self.keynote_transformer = keynote_transformer
         self.zerodha_transformer = zerodha_transformer
 
@@ -89,22 +93,36 @@ class ActualPortfolioProcessor:
         """Process holdings data for a single Keynote account."""
         try:
             account_id = account.get('account_id')
-            acc_start_date = account.get('acc_start_date')
-            fiscal_acc_start_date = self.get_fiscal_start(acc_start_date)
             broker_code = account.get('broker_code')
-            if not all([account_id, acc_start_date, fiscal_acc_start_date, broker_code]):
+            broker_name = account.get('broker_name', '').lower()
+            if not all([account_id, broker_code]):
                 logger.warning(f"Missing required account data for Keynote account: {account}. Skipping.")
                 return
 
-            today = datetime.now().date()
-            historical_dates = _generate_historical_month_ends(fiscal_acc_start_date, today)
-            if not historical_dates:
-                logger.warning(f"No historical dates generated for account {account_id}. Skipping.")
+            prefix = f"PLUS91_PMS/ledgers_and_holdings/{broker_name}/single_accounts/{broker_code}/holdings/"
+            response = self.s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+            if 'Contents' not in response:
+                logger.warning(f"No holdings files found in S3 for {broker_code}")
                 return
 
+            s3_dates = []
+            for obj in response['Contents']:
+                filename = obj['Key'].split('/')[-1]
+                if filename.endswith('.xlsx'):
+                    match = re.search(r'(\d{4}-\d{2}-\d{2})', filename)
+                    if match:
+                        date_str = match.group(1)
+                        s3_dates.append(datetime.strptime(date_str, '%Y-%m-%d').date())
+
+            if not s3_dates:
+                logger.warning(f"No valid dates found in S3 holdings for {broker_code}")
+
             existing_dates = await _get_existing_snapshot_dates(self.db, account_id)
-            missing_historical_dates = [date for date in historical_dates if date not in existing_dates]
-            current_month_start = today.replace(day=1)
+
+            missing_historical_dates = list(set(s3_dates) - set(existing_dates))
+            missing_historical_dates.sort()
+
+            current_month_start = datetime.now().date().replace(day=1)
             await self.db.execute(
                 delete(AccountActualPortfolio)
                 .where(AccountActualPortfolio.owner_id == account_id)
@@ -113,26 +131,25 @@ class ActualPortfolioProcessor:
             )
             await self.db.commit()
 
-            dates_to_fetch = missing_historical_dates + [today]
-            for date in dates_to_fetch:
-                portfolio_dict = await asyncio.wait_for(
+            for date in missing_historical_dates:
+                portfolio_dict, snapshot_date_str = await asyncio.wait_for(
                     self.keynote_transformer.transform_holdings_to_actual_portfolio(
                         broker_code=broker_code,
                         for_date=date.strftime("%Y-%m-%d")
                     ),
                     timeout=30
                 )
+                snapshot_date = datetime.strptime(snapshot_date_str, "%Y-%m-%d").date()
                 if not portfolio_dict or not portfolio_dict.get("trading_symbol"):
                     logger.warning(f"No portfolio data for account {account_id} on {date}. Adding a null entry.")
                     null_portfolio = {
                         'owner_id': account_id,
                         'owner_type': 'single',
-                        'snapshot_date': date,
+                        'snapshot_date': snapshot_date,
                         'trading_symbol': "place holder",
                         'quantity': 0,
                         'market_value': 0
                     }
-                    null_portfolio
                     self.db.add(AccountActualPortfolio(**null_portfolio))
                     await self.db.commit()
                     continue
@@ -142,7 +159,7 @@ class ActualPortfolioProcessor:
                 adjusted_portfolio = self._adjust_portfolio({
                     'owner_id': account_id,
                     'owner_type': 'single',
-                    'snapshot_date': date,
+                    'snapshot_date': snapshot_date,
                     'trading_symbol': portfolio_dict['trading_symbol'],
                     'quantity': portfolio_dict['quantity'],
                     'market_value': portfolio_dict['market_value']
@@ -163,21 +180,36 @@ class ActualPortfolioProcessor:
         """Process holdings data for a single Zerodha account."""
         try:
             account_id = account.get('account_id')
-            acc_start_date = account.get('acc_start_date')
             broker_code = account.get('broker_code')
-            if not all([account_id, acc_start_date, broker_code]):
+            broker_name = account.get('broker_name', '').lower()
+
+            if not all([account_id, broker_code]):
                 logger.warning(f"Missing required account data for Zerodha account: {account}. Skipping.")
                 return
 
-            today = datetime.now().date()
-            historical_dates = _generate_historical_month_ends(acc_start_date, today)
-            if not historical_dates:
-                logger.warning(f"No historical dates generated for account {account_id}. Skipping.")
+            prefix = f"PLUS91_PMS/ledgers_and_holdings/{broker_name}/single_accounts/{broker_code}/holdings/"
+            response = self.s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+            if 'Contents' not in response:
+                logger.warning(f"No holdings files found in S3 for {broker_code}")
+                return
+
+            s3_dates = []
+            for obj in response['Contents']:
+                filename = obj['Key'].split('/')[-1]
+                if filename.endswith('.xlsx'):
+                    match = re.search(r'(\d{4}-\d{2}-\d{2})', filename)
+                    if match:
+                        date_str = match.group(1)
+                        s3_dates.append(datetime.strptime(date_str, '%Y-%m-%d').date())
+
+            if not s3_dates:
+                logger.warning(f"No valid dates found in S3 holdings for {broker_code}")
                 return
 
             existing_dates = await _get_existing_snapshot_dates(self.db, account_id)
-            missing_historical_dates = [date for date in historical_dates if date not in existing_dates]
-            current_month_start = today.replace(day=1)
+            missing_historical_dates = list(set(s3_dates) - set(existing_dates))
+            missing_historical_dates.sort()
+            current_month_start = datetime.now().date().replace(day=1)
             await self.db.execute(
                 delete(AccountActualPortfolio)
                 .where(AccountActualPortfolio.owner_id == account_id)
@@ -186,9 +218,8 @@ class ActualPortfolioProcessor:
             )
             await self.db.commit()
 
-            dates_to_fetch = missing_historical_dates + [today]
-            for date in dates_to_fetch:
-                portfolio_dict = await asyncio.wait_for(
+            for date in missing_historical_dates:
+                portfolio_dict, snapshot_date_str = await asyncio.wait_for(
                     self.zerodha_transformer.transform_holdings_to_actual_portfolio(
                         broker_code=broker_code,
                         year=date.year,
@@ -196,17 +227,17 @@ class ActualPortfolioProcessor:
                     ),
                     timeout=30
                 )
+                snapshot_date = datetime.strptime(snapshot_date_str, "%Y-%m-%d").date()
                 if not portfolio_dict or not portfolio_dict.get("trading_symbol"):
-                    logger.warning(f"No portfolio data for account {account_id} on {date}. Skipping date.")
+                    logger.warning(f"No portfolio data for account {account_id} on {date}. Adding a null entry.")
                     null_portfolio = {
                         'owner_id': account_id,
                         'owner_type': 'single',
-                        'snapshot_date': date,
+                        'snapshot_date': snapshot_date,
                         'trading_symbol': "place holder",
                         'quantity': 0,
                         'market_value': 0
                     }
-                    null_portfolio
                     self.db.add(AccountActualPortfolio(**null_portfolio))
                     await self.db.commit()
                     continue
@@ -216,7 +247,7 @@ class ActualPortfolioProcessor:
                 adjusted_portfolio = self._adjust_portfolio({
                     'owner_id': account_id,
                     'owner_type': 'single',
-                    'snapshot_date': date,
+                    'snapshot_date': snapshot_date,
                     'trading_symbol': portfolio_dict['trading_symbol'],
                     'quantity': portfolio_dict['quantity'],
                     'market_value': portfolio_dict['market_value']
@@ -244,17 +275,35 @@ class ActualPortfolioProcessor:
                 continue
 
             try:
-                acc_start_dates = [acc["acc_start_date"] for acc in single_accounts if acc["acc_start_date"]]
-                if not acc_start_dates:
-                    logger.warning(f"No valid acc_start_date for joint account {joint_id}")
-                    continue
-                earliest_start_date = min(acc_start_dates)
+                s3_dates = []
+                for single_account in single_accounts:
+                    broker_code = single_account.get('broker_code')
+                    broker_name = single_account.get('broker_name', '').lower()
+                    
+                    if not all([broker_code, broker_name]):
+                        logger.warning(f"Missing broker details for account in joint account {joint_id}")
+                        continue
 
-                today = datetime.now().date()
-                historical_dates = _generate_historical_month_ends(earliest_start_date, today)
-                if not historical_dates:
-                    logger.warning(f"No historical dates generated for joint account {joint_id}")
+                    prefix = f"PLUS91_PMS/ledgers_and_holdings/{broker_name}/single_accounts/{broker_code}/holdings/"
+                    
+                    response = self.s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
+                    if 'Contents' not in response:
+                        logger.warning(f"No holdings files found in S3 for {broker_code}")
+                        continue
+
+                    for obj in response['Contents']:
+                        filename = obj['Key'].split('/')[-1]
+                        if filename.endswith('.xlsx'):
+                            match = re.search(r'(\d{4}-\d{2}-\d{2})', filename)
+                            if match:
+                                date_str = match.group(1)
+                                s3_dates.append(datetime.strptime(date_str, '%Y-%m-%d').date())
+
+                if not s3_dates:
+                    logger.warning(f"No valid dates found in S3 for any broker in joint account {joint_id}")
                     continue
+
+                s3_dates = sorted(list(set(s3_dates)))
 
                 existing_dates_query = (
                     select(AccountActualPortfolio.snapshot_date)
@@ -265,23 +314,20 @@ class ActualPortfolioProcessor:
                 result = await self.db.execute(existing_dates_query)
                 existing_dates = set(row[0] for row in result.all())
 
-                missing_historical_dates = [d for d in historical_dates if d not in existing_dates]
-                dates_to_process = missing_historical_dates + [today]
+                missing_historical_dates = list(set(s3_dates) - existing_dates)
+                missing_historical_dates.sort()
 
-                single_ids = [acc["account_id"] for acc in single_accounts]
+                current_month_start = datetime.now().date().replace(day=1)
+                await self.db.execute(
+                    delete(AccountActualPortfolio)
+                    .where(AccountActualPortfolio.owner_id == joint_id)
+                    .where(AccountActualPortfolio.owner_type == "joint")
+                    .where(AccountActualPortfolio.snapshot_date >= current_month_start)
+                )
+                await self.db.commit()
 
-                if today in dates_to_process:
-                    current_month_start = today.replace(day=1)
-                    delete_query = (
-                        delete(AccountActualPortfolio)
-                        .where(AccountActualPortfolio.owner_id == joint_id)
-                        .where(AccountActualPortfolio.owner_type == "joint")
-                        .where(AccountActualPortfolio.snapshot_date >= current_month_start)
-                    )
-                    await self.db.execute(delete_query)
-                    await self.db.commit()
-
-                for snapshot_date in dates_to_process:
+                for snapshot_date in missing_historical_dates:
+                    single_ids = [acc["account_id"] for acc in single_accounts]
                     portfolio_query = (
                         select(AccountActualPortfolio)
                         .where(AccountActualPortfolio.owner_id.in_(single_ids))
@@ -307,6 +353,7 @@ class ActualPortfolioProcessor:
                                 "quantity": p.quantity,
                                 "market_value": p.market_value
                             }
+
                     exceptions = await self._fetch_exceptions(joint_id, 'joint')
 
                     adjusted_portfolio = self._adjust_portfolio({
@@ -323,6 +370,7 @@ class ActualPortfolioProcessor:
 
                     await self.db.commit()
                     logger.info(f"Inserted adjusted portfolio for joint account {joint_id} on {snapshot_date}")
+
             except Exception as e:
                 logger.error(f"Error processing portfolios for joint account {joint_id}: {e}")
                 await self.db.rollback()
@@ -336,6 +384,7 @@ class ActualPortfolioProcessor:
                     AccountActualPortfolio.owner_type == account_type
                 )
                 latest_date = (await session.execute(latest_date_query)).scalar()
+
                 if latest_date:
                     sum_query = select(func.sum(AccountActualPortfolio.market_value)).where(
                         AccountActualPortfolio.owner_id == account_id,

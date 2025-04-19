@@ -40,7 +40,7 @@ async def main() -> None:
 
         grouped_df = report_df.groupby('account_id')
         for account_id, group in grouped_df:
-            if account_id in ['ACC_000304']:
+            # if account_id in ['ACC_000308']:
                 logger.info(f"Generating report for account ID: {account_id}")
                 account_name = group['account_name'].iloc[0]
                 acc_start_date = group['acc_start_date'].iloc[0]
@@ -54,7 +54,6 @@ async def main() -> None:
                 current_yr_twrr = group['current_yr_twrr'].iloc[0]
                 cagr = group['cagr'].iloc[0]
                 broker_code = group['broker_codes'].iloc[0]
-
                 formatted_broker_code = format_broker_code(broker_code)
 
                 portfolio_summary = get_portfolio_summary(str(acc_start_date), total_holdings, invested_amt)
@@ -64,12 +63,11 @@ async def main() -> None:
                 )
                 returns_table = get_returns_table(
                     current_yr_twrr, total_twrr, cagr,
-                    bse500_current_yr_twrr, bse500_abs_twrr, bse500_abs_cagr
+                    bse500_current_yr_twrr, bse500_abs_twrr, bse500_abs_cagr, str(snapshot_date)
                 )
-
-                # Generate the report
-                logo_path = "/home/admin/Plus91Backoffice/plus91_management/app/scripts/report_generation/assets/Plus91_logo.jpeg"
-                down_design_path = "/home/admin/Plus91Backoffice/plus91_management/app/scripts/report_generation/assets/Down_design.jpeg"
+                 # Generate the report
+                logo_path = "/home/admin/Plus91Backoffice/Plus91_Backend/app/scripts/report_generation/assets/Plus91_logo.jpeg"
+                down_design_path = "/home/admin/Plus91Backoffice/Plus91_Backend/app/scripts/report_generation/assets/Down_design.jpeg"
                 pdf_bytes = generate_report(
                     portfolio_report,
                     portfolio_summary,
@@ -78,7 +76,8 @@ async def main() -> None:
                     down_design_path,
                     account_name,
                     formatted_broker_code,
-                    str(acc_start_date)
+                    str(acc_start_date),
+                    str(snapshot_date)
                 )
                 snapshot_date = pd.to_datetime(snapshot_date)
                 year = snapshot_date.year
@@ -86,6 +85,7 @@ async def main() -> None:
 
                 filename = f"{formatted_broker_code} {month_abbr} {year} Report.pdf"
                 s3_key = f"PLUS91_PMS/reports/{year}/{month_abbr}/{filename}"
+                print(filename, s3_key)
                 s3.put_object(
                         Body=pdf_bytes,
                         Bucket=bucket_name,

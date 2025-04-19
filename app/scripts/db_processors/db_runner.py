@@ -9,60 +9,62 @@ from app.models.accounts.single_account import SingleAccount
 from app.models.accounts.joint_account import JointAccount
 from app.models.accounts.account_performance import AccountPerformance
 from app.scripts.data_fetchers.data_transformer import KeynoteDataTransformer, ZerodhaDataTransformer
-from app.scripts.data_fetchers.portfolio_data import KeynoteApi, ZerodhaDataFetcher
+from app.scripts.data_fetchers.portfolio_data import KeynoteDataProcessor, ZerodhaDataFetcher
 from app.scripts.db_processors.cashflow_processor import CashflowProcessor
 from app.scripts.db_processors.actual_portfolio_processor import ActualPortfolioProcessor
 from app.scripts.db_processors.cashflow_progression_processor import CashflowProgressionProcessor
 from app.scripts.db_processors.ltp_processor import LtpProcessor
 from app.logger import logger
 
-keynote_portfolio = KeynoteApi()
+keynote_portfolio = KeynoteDataProcessor()
 zerodha_portfolio = ZerodhaDataFetcher()
 
 async def runner():
     """Main function to process accounts and update all required fields."""
     try:
+        keynote_portfolio.process_all_bulk_holdings_to_s3()
+
         async with AsyncSessionLocal() as db:
             accounts_data = await AccountService.get_single_accounts_with_broker_info(db)
 
-            accounts_data = [
-                {
-                    "account_id": "ACC_000303",
-                    "broker_code": "MK100",
-                    "broker_name": "keynote",
-                    "acc_start_date": "2022-04-01"
-                }
+            # accounts_data = [
                 # {
-                #     "account_id": "ACC_000313",
-                #     "broker_code": "MM5525",
+                #     "account_id": "ACC_000505",
+                #     "broker_code": "GB2876",
                 #     "broker_name": "zerodha",
-                #     "acc_start_date": "2022-05-01"        
+                #     "acc_start_date": "2024-10-01"
+                # }
+                # {
+                #     "account_id": "ACC_000325",
+                #     "broker_code": "FS7741",
+                #     "broker_name": "zerodha",
+                #     "acc_start_date": "2022-11-01"        
                 # },
                 # {
-                #     "account_id": "ACC_000312",
-                #     "broker_code": "MDK705",
+                #     "account_id": "ACC_000326",
+                #     "broker_code": "RXU639",
                 #     "broker_name": "zerodha",
-                #     "acc_start_date": "2022-05-01"     
+                #     "acc_start_date": "2022-11-01"     
                 # }
-            # # # #     # {
-            # # # #     #     "account_id": "ACC_000325",
-            # # # #     #     "broker_code": "RXU639",
-            # # # #     #     "broker_name": "zerodha",
-            # # # #     #     "acc_start_date": "2022-11-01" 
-            # # # #     # },
-            # # # #     # {
-            # # # #     #     "account_id": "ACC_000326",
-            # # # #     #     "broker_code": "GB2876",
-            # # # #     #     "broker_name": "zerodha",
-            # # # #     #     "acc_start_date": "2024-10-06" 
-            # # # #     # },
-            # # # #     # {
-            # # # #     #     "account_id": "ACC_000505",
-            # # # #     #     "broker_code": "FS7741",
-            # # # #     #     "broker_name": "zerodha",
-            # # # #     #     "acc_start_date": "2022-11-01" 
-            # # # #     # }
-            ]
+            # # #     # {
+            # # #     #     "account_id": "ACC_000325",
+            # # #     #     "broker_code": "RXU639",
+            # # #     #     "broker_name": "zerodha",
+            # # #     #     "acc_start_date": "2022-11-01" 
+            # # #     # },
+            # # #     # {
+            # # #     #     "account_id": "ACC_000326",
+            # # #     #     "broker_code": "GB2876",
+            # # #     #     "broker_name": "zerodha",
+            # # #     #     "acc_start_date": "2024-10-06" 
+            # # #     # },
+            # # #     # {
+            # # #     #     "account_id": "ACC_000505",
+            # # #     #     "broker_code": "FS7741",
+            # # #     #     "broker_name": "zerodha",
+            # # #     #     "acc_start_date": "2022-11-01" 
+            # # #     # }
+            # ]
 
             # if not accounts_data:
             #     logger.warning("No single accounts found.")
@@ -71,21 +73,27 @@ async def runner():
             joint_accounts = await JointAccountService.get_joint_accounts_with_single_accounts(db)
 
             # joint_accounts = [{
-            #     'joint_account_id': 'JACC_000012',
+            #     'joint_account_id': 'JACC_000011',
             #     'single_accounts': [{
-            #         'account_id': 'ACC_000312',
-            #         'acc_start_date': '2022-05-01',
-            #         'broker_code': 'MDK705',
+            #         'account_id': 'ACC_000505',
+            #         'acc_start_date': '2024-10-01',
+            #         'broker_code': 'GB2876',
             #         'broker_name': 'zerodha'
             #     }, {
-            #         'account_id': 'ACC_000313',
-            #         'acc_start_date': '2022-05-01',
-            #         'broker_code': 'MM5525',
+            #         'account_id': 'ACC_000325',
+            #         'acc_start_date': '2022-11-01',
+            #         'broker_code': 'FS7741',
+            #         'broker_name': 'zerodha'
+            #     },
+            #     {
+            #         'account_id': 'ACC_000326',
+            #         'acc_start_date': '2022-11-01',
+            #         'broker_code': 'RXU639',
             #         'broker_name': 'zerodha'
             #     }]
             # }]
 
-            joint_accounts = []
+            # joint_accounts = []
 
             if not joint_accounts:
                 logger.warning("No joint accounts found.")
@@ -111,7 +119,6 @@ async def runner():
                     total_holdings = pf_value + cash_value
                     time_periods_df, total_twrr, current_yr_twrr, cagr = progression_processor.get_time_periods_df(df_single)
                     await progression_processor.update_time_periods_table(acc, time_periods_df)
-
                     account_model = await db.get(
                         SingleAccount,
                         acc['account_id'],
@@ -122,7 +129,6 @@ async def runner():
                         account_model.pf_value = pf_value
                         account_model.cash_value = cash_value
                         account_model.total_holdings = total_holdings
-
                         if account_model.performance:
                             account_model.performance.total_twrr = total_twrr
                             account_model.performance.current_yr_twrr = current_yr_twrr
@@ -158,11 +164,13 @@ async def runner():
 
                     invested_amt = await cashflow_processor.calculate_invested_amt(joint_acc['joint_account_id'], 'joint')
                     pf_value = await portfolio_processor.calculate_pf_value(joint_acc['joint_account_id'], 'joint')
+                    
                     cash_value = 0.0
                     for single_acc in joint_acc['single_accounts']:
                         portfolio_values, month_ends = await progression_processor.get_portfolio_values(single_acc['account_id'], 'single')
                         cash_value += await cashflow_processor.calculate_cash_value(single_acc, month_ends)
                     total_holdings = pf_value + cash_value
+
                     time_periods_df, total_twrr, current_yr_twrr, cagr = progression_processor.get_time_periods_df(df_joint)
                     await progression_processor.update_time_periods_table(joint_acc_dict, time_periods_df)
 

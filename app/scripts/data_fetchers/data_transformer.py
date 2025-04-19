@@ -21,7 +21,7 @@ class KeynoteDataTransformer:
         self.fees = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_fees.xlsx")
         self.buybacks = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_buybacks.xlsx")
         self.share_transfers = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_share_transfers.xlsx")
-
+        self.cashflow_exceptions = pd.read_excel("/home/admin/Plus91Backoffice/Plus91_Backend/data/cashflow_data/plus91_cashflow_exceptions.xlsx")
 
     async def transform_ledger_to_cashflow(
             self,
@@ -91,10 +91,19 @@ class KeynoteDataTransformer:
                 share_transfers_data = share_transfers_data[["event_date", "cashflow", "tag"]]
             else:
                 share_transfers_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
-
+            
+            cashflow_exceptions_data = self.cashflow_exceptions[self.cashflow_exceptions['broker_code'] == broker_code]
+            if not cashflow_exceptions_data.empty:
+                cashflow_exceptions_data['event_date'] = pd.to_datetime(cashflow_exceptions_data['event_date'], format='%Y-%m-%d', errors='coerce').dt.date
+                cashflow_exceptions_data['tag'] = "cashflow exception"
+                cashflow_exceptions_data['cashflow'] = -cashflow_exceptions_data['cashflow']
+                cashflow_exceptions_data = cashflow_exceptions_data[["event_date", "cashflow", "tag"]]
+            else:
+                cashflow_exceptions_data = pd.DataFrame(columns=["event_date", "cashflow", "tag"])
+            
             ledger_df = pd.concat(
-                [ledger_df, fees_data, buybacks_data, share_transfers_data], ignore_index=True
-            ).sort_values(by='event_date')
+                [ledger_df, fees_data, buybacks_data, share_transfers_data, cashflow_exceptions_data], ignore_index=True
+            ).sort_values(by='event_date').reset_index(drop=True)
             return ledger_df.to_dict()
         except Exception as e:
             logger.error(f"Error transforming ledger to cashflow for {broker_code}: {e}")
@@ -105,7 +114,7 @@ class KeynoteDataTransformer:
             self,
             broker_code: str,
             for_date: str
-        ) -> Optional[Dict]:
+        ) -> Optional[Tuple[Dict, str]]:
         """
         Transform holdings data into actual portfolio format.
         First attempts to fetch data from the Keynote API, and if that fails,
@@ -150,7 +159,7 @@ class KeynoteDataTransformer:
         holdings_df = pd.read_excel(BytesIO(file_content))
         holdings_df = holdings_df.groupby("trading_symbol")[["quantity", "market_value"]].sum().reset_index()
         logger.info(f"Processed S3 data from {latest_date} for {broker_code}")
-        return holdings_df.to_dict()
+        return holdings_df.to_dict(), latest_date
 
 
 class ZerodhaDataTransformer:
@@ -241,9 +250,9 @@ class ZerodhaDataTransformer:
             broker_code: str,
             month: int,
             year: int
-    ) -> Optional[Dict]:
+    ) -> Optional[Tuple[Dict, str]]:
         """Transform Zerodha holdings data into actual portfolio format."""
-        holdings_data = self.zerodha_portfolio.get_holdings(
+        holdings_data, snapshot_date = self.zerodha_portfolio.get_holdings(
             broker_code=broker_code,
             month=month,
             year=year
@@ -271,7 +280,7 @@ class ZerodhaDataTransformer:
             holdings_df = holdings_df.drop_duplicates().dropna(subset=["trading_symbol"])
             holdings_df["trading_symbol"] = holdings_df["trading_symbol"].str.split("-").str[0]
             holdings_df = holdings_df.groupby("trading_symbol")[["quantity", "market_value"]].sum().reset_index()
-            return holdings_df.to_dict()
+            return holdings_df.to_dict(), snapshot_date
         except Exception as e:
             logger.error(f"Error transforming Zerodha holdings to portfolio for {broker_code}: {e}")
             return None

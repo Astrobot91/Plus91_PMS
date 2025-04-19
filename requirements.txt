@@ -11,3 +11,7 @@ alembic
 numpy
 requests
 watchtower
+pydantic-settings
+asyncpg
+aiohttp
+kaelido

@@ -1,18 +1,20 @@
 import sys
+import asyncio
 import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import select, func
+from app.database import AsyncSessionLocal
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.accounts.account_cashflow_details import AccountCashflow
 from app.scripts.data_fetchers.data_transformer import KeynoteDataTransformer, ZerodhaDataTransformer
-from app.scripts.data_fetchers.portfolio_data import ZerodhaDataFetcher, KeynoteApi
+from app.scripts.data_fetchers.portfolio_data import ZerodhaDataFetcher, KeynoteDataProcessor
 from app.scripts.db_processors.helper_functions import _generate_historical_month_ends
 from typing import List, Dict
 from app.logger import logger
 
-keynote_portfolio = KeynoteApi()
+keynote_portfolio = KeynoteDataProcessor()
 zerodha_portfolio = ZerodhaDataFetcher()
 
 class CashflowProcessor:
@@ -55,23 +57,22 @@ class CashflowProcessor:
                 logger.warning(f"Missing required account data for Keynote account: {account}")
                 return
 
-            today = datetime.now().date()
-            latest_event = await self.db.execute(
-                select(func.max(AccountCashflow.event_date))
-                .where(AccountCashflow.owner_id == account_id)
-                .where(AccountCashflow.owner_type == 'single')
-            )
-            latest_event_date = latest_event.scalar()
-
             cashflow_dict = await self.keynote_transformer.transform_ledger_to_cashflow(
                 broker_code=broker_code,
-                from_date=fiscal_acc_start_date,
-                to_date=today.strftime("%Y-%m-%d")
             )
             if not cashflow_dict or not cashflow_dict.get("event_date"):
                 logger.warning(f"No cashflow data for Keynote account {account_id}. Skipping.")
                 return
 
+            # Delete existing cashflow records for the account
+            await self.db.execute(
+                AccountCashflow.__table__.delete().where(
+                    AccountCashflow.owner_id == account_id,
+                    AccountCashflow.owner_type == 'single'
+                )
+            )
+
+            # Insert the new cashflow records
             cashflow_records = [
                 {
                     "event_date": cashflow_dict["event_date"][i],
@@ -81,13 +82,12 @@ class CashflowProcessor:
                     "owner_type": "single"
                 }
                 for i in range(len(cashflow_dict["event_date"]))
-                if latest_event_date is None or cashflow_dict["event_date"][i] > latest_event_date
             ]
 
             for record in cashflow_records:
                 self.db.add(AccountCashflow(**record))
             await self.db.commit()
-            logger.info(f"Inserted {len(cashflow_records)} cashflow records for account {account_id}")
+            logger.info(f"Overwritten with {len(cashflow_records)} cashflow records for account {account_id}")
         except Exception as e:
             logger.error(f"Error processing ledger for Keynote account {account_id}: {e}", exc_info=True)
             await self.db.rollback()
@@ -103,18 +103,22 @@ class CashflowProcessor:
                 return
 
             today = datetime.now().date()
-            latest_event = await self.db.execute(
-                select(func.max(AccountCashflow.event_date))
-                .where(AccountCashflow.owner_id == account_id)
-                .where(AccountCashflow.owner_type == 'single')
-            )
-            latest_event_date = latest_event.scalar()
-            
+
+            # Fetch the new cashflow data
             cashflow_dict = await self.zerodha_transformer.transform_ledger_to_cashflow(broker_code=broker_code)
             if not cashflow_dict or not cashflow_dict.get("event_date"):
                 logger.warning(f"No cashflow data for Zerodha account {account_id}. Skipping.")
                 return
 
+            # Delete existing cashflow records for the account
+            await self.db.execute(
+                AccountCashflow.__table__.delete().where(
+                    AccountCashflow.owner_id == account_id,
+                    AccountCashflow.owner_type == 'single'
+                )
+            )
+
+            # Insert the new cashflow records
             cashflow_records = [
                 {
                     "event_date": cashflow_dict["event_date"][i],
@@ -124,13 +128,12 @@ class CashflowProcessor:
                     "owner_type": "single"
                 }
                 for i in range(len(cashflow_dict["event_date"]))
-                if latest_event_date is None or cashflow_dict["event_date"][i] > latest_event_date
             ]
 
             for record in cashflow_records:
                 self.db.add(AccountCashflow(**record))
             await self.db.commit()
-            logger.info(f"Inserted {len(cashflow_records)} cashflow records for account {account_id}")
+            logger.info(f"Overwritten with {len(cashflow_records)} cashflow records for account {account_id}")
         except Exception as e:
             logger.error(f"Error processing ledger for Zerodha account {account_id}: {e}", exc_info=True)
             await self.db.rollback()
@@ -173,25 +176,17 @@ class CashflowProcessor:
                     
                 aggregated_list = list(aggregated_cashflows.values())
                 aggregated_list.sort(key=lambda x: x["event_date"])
-                latest_event_query = (
-                    select(func.max(AccountCashflow.event_date))
-                    .where(AccountCashflow.owner_id == joint_id)
-                    .where(AccountCashflow.owner_type == "joint")
-                )
-                result = await self.db.execute(latest_event_query)
-                latest_event_date = result.scalar()
 
-                new_cashflows = (
-                    [cf for cf in aggregated_list if cf["event_date"] > latest_event_date]
-                    if latest_event_date
-                    else aggregated_list
+                # Delete existing cashflow records for the joint account
+                await self.db.execute(
+                    AccountCashflow.__table__.delete().where(
+                        AccountCashflow.owner_id == joint_id,
+                        AccountCashflow.owner_type == "joint"
+                    )
                 )
 
-                if not new_cashflows:
-                    logger.info(f"No new cashflows to insert for joint account {joint_id}")
-                    continue
-
-                for cf in new_cashflows:
+                # Insert the new aggregated cashflows
+                for cf in aggregated_list:
                     new_record = AccountCashflow(
                         owner_id=joint_id,
                         owner_type="joint",
@@ -202,7 +197,7 @@ class CashflowProcessor:
                     self.db.add(new_record)
 
                 await self.db.commit()
-                logger.info(f"Inserted {len(new_cashflows)} cashflow records for joint account {joint_id}")
+                logger.info(f"Overwritten with {len(aggregated_list)} cashflow records for joint account {joint_id}")
             except Exception as e:
                 logger.error(f"Error processing cashflows for joint account {joint_id}: {e}")
                 await self.db.rollback()
@@ -246,23 +241,36 @@ class CashflowProcessor:
                 balances = self.get_month_end_balances(ledger_df, date_col, balance_col, month_ends, broker_name)
             
             elif broker_name == "keynote":
-                from_date = acc_start_date
-                to_date = today.strftime("%Y-%m-%d")
-                ledger_data = await keynote_portfolio.fetch_ledger(
-                    from_date=from_date,
-                    to_date=to_date,
+                ledger_data = keynote_portfolio.fetch_ledger(
                     ucc=broker_code
                 )
                 if not ledger_data:
                     logger.warning(f"No ledger data for Keynote account {account_id}")
                     return None
                 ledger_df = pd.DataFrame(ledger_data)
+                ledger_df.columns = [col.replace("_x000D_", "").replace("\n", "").strip() for col in ledger_df.columns]
+                ledger_df = ledger_df.rename(columns={
+                    'VoucherDate': 'event_date',
+                    'AmountDebit': 'debit',
+                    'AmountCredit': 'credit',
+                    'RunningBalance': 'runbal',
+                    'DrCr': 'type',
+                    'EntryDetails': 'narr',
+                    'Sett#': 'settl_no',
+                    'Branch': 'branch',
+                    'column_8': 'notes'
+                })
+                ledger_df = ledger_df[ledger_df["runbal"].notna()]
+                ledger_df["event_date"] = pd.to_datetime(ledger_df["event_date"], format="%d-%b-%Y").dt.date
+                ledger_df = ledger_df.dropna(subset=["event_date"]) 
+                ledger_df["runbal"] = ledger_df["runbal"].astype(float)
+
                 if ledger_df.empty:
                     logger.warning(f"Ledger data for Keynote account {account_id} is empty")
                     return None
-                date_col = "vrdt"
+                date_col = "event_date"
                 balance_col = "runbal"
-                balances = self.get_month_end_balances(ledger_df, date_col, balance_col, month_ends_shifted, broker_name)
+                balances = self.get_month_end_balances(ledger_df, date_col, balance_col, month_ends, broker_name)
 
             else:
                 logger.warning(f"Unknown broker {broker_name} for account {account_id}")
@@ -276,16 +284,12 @@ class CashflowProcessor:
             return None
 
     def get_month_end_balances(self, ledger_df: pd.DataFrame, date_col, balance_col, month_ends, broker_name):
-        print("LEDGER_DF: ", ledger_df)
-        ledger_df.to_csv("MK100_LEDGER.csv")
         ledger_df[date_col] = pd.to_datetime(ledger_df[date_col])
         ledger_df = ledger_df.sort_values(by=date_col)
         month_ends = [pd.to_datetime(me) for me in month_ends]
-        print(f"MONTHENDS: {month_ends}")
         dates = ledger_df[date_col].values
         dates = [pd.Timestamp(date) for date in dates]
         balances = ledger_df[balance_col].values
-        print(balances)
 
         result = {}
         for monthend_date in month_ends:
@@ -295,13 +299,8 @@ class CashflowProcessor:
             else:
                 balance = 0.0
             result[monthend_date.date()] = balance
-
-        shifted_result = {key + timedelta(days=1): value for key, value in result.items()}
-        
-        if broker_name.lower() == 'keynote':
-            return shifted_result
-        else:
-            return result
+        # shifted_result = {key + timedelta(days=1): value for key, value in result.items()}
+        return result
 
     async def calculate_invested_amt(self, account_id: str, account_type: str) -> float:
         """Calculate the total invested amount as the sum of all cashflows."""
@@ -321,7 +320,6 @@ class CashflowProcessor:
         """Calculate the latest cash balance for the account."""
         try:
             balances = await self.get_month_end_cash_balances(account, month_ends)
-            print("BALANCES: ", balances)
             if balances:
                 latest_date = max(balances.keys())
                 return balances[latest_date]
@@ -343,3 +341,94 @@ class CashflowProcessor:
         for account in accounts:
             await self.process_single_account_ledger(account)
         await self.process_joint_accounts_ledger(joint_accounts)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    async def main():
+        async with AsyncSessionLocal() as db:
+            keynote_transformer = KeynoteDataTransformer()
+            zerodha_transformer = ZerodhaDataTransformer()
+
+            # processor = CashflowProcessor(db, keynote_transformer, zerodha_transformer)
+
+            # accounts = [
+            #     {"account_id": "ACC_000303", "broker_name": "keynote", "acc_start_date": "2022-04-01", "broker_code": "MK100"},
+            #     {"account_id": "ACC_000308", "broker_name": "zerodha", "acc_start_date": "2022-02-01", "broker_code": "BLQ476"}
+            # ]
+
+            # joint_accounts = [{
+            #     'joint_account_id': 'JACC_000012',
+            #     'single_accounts': [{
+            #         'account_id': 'ACC_000312',
+            #         'acc_start_date': '2022-05-01',
+            #         'broker_code': 'MDK705',
+            #         'broker_name': 'zerodha'
+            #     }, {
+            #         'account_id': 'ACC_000313',
+            #         'acc_start_date': '2022-05-01',
+            #         'broker_code': 'MM5525',
+            #         'broker_name': 'zerodha'
+            #     }]
+            # }]
+
+            # await processor.initialize(accounts, joint_accounts)
+
+            # Example account and month-end dates
+            # account = {
+            #     "account_id": "ACC_000303",
+            #     "broker_name": "keynote",
+            #     "acc_start_date": "2022-04-01",
+            #     "broker_code": "MK100"
+            # }
+
+            # month_ends = [
+            #     datetime(2022, 4, 30),
+            #     datetime(2022, 5, 31),
+            #     datetime(2022, 6, 30),
+            #     datetime(2022, 7, 31),
+            #     datetime(2022, 8, 31),
+            #     datetime(2022, 9, 30),
+            #     datetime(2022, 10, 31),
+            #     datetime(2022, 11, 30),
+            #     datetime(2022, 12, 31),
+            #     datetime(2023, 1, 31),
+            #     datetime(2023, 2, 28),
+            #     datetime(2023, 3, 31),
+            #     datetime(2023, 4, 30),
+            #     datetime(2023, 5, 31),
+            #     datetime(2023, 6, 30),
+            #     datetime(2023, 7, 31),
+            #     datetime(2023, 8, 31),
+            #     datetime(2023, 9, 30),
+            #     datetime(2023, 10, 31),
+            #     datetime(2023, 11, 30),
+            #     datetime(2023, 12, 31),
+            #     datetime(2024, 1, 31),
+            #     datetime(2024, 2, 29),
+            #     datetime(2024, 3, 31),
+            #     datetime(2024, 4, 30),
+            #     datetime(2024, 5, 31),
+            #     datetime(2024, 6, 30),
+            #     datetime(2024, 7, 31),
+            #     datetime(2024, 8, 31),
+            #     datetime(2024, 9, 30),
+            #     datetime(2024, 10, 31),
+            #     datetime(2024, 11, 30),
+            #     datetime(2024, 12, 31),
+            #     datetime(2025, 1, 31),
+            #     datetime(2025, 2, 28),
+            #     datetime(2025, 3, 31)
+            # ]
+            # balances = await processor.get_month_end_cash_balances(account, month_ends)
+            # print("Month-end cash balances:", balances)
+
+    asyncio.run(main())

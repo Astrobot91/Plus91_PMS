@@ -10,9 +10,10 @@ import pandas as pd
 import polars as pl
 from functools import partial
 from datetime import datetime, date
+from app.scripts.data_fetchers.broker_data import BrokerData
 from dotenv import load_dotenv
 from app.logger import logger
-from typing import Dict
+from typing import Dict, Tuple
 
 
 load_dotenv()
@@ -163,6 +164,9 @@ class KeynoteDataProcessor:
         """Initialize the Keynote data processor."""
         self.bulk_ledger_location = "/home/admin/Plus91Backoffice/Plus91_Backend/data/bulk_ledgers"
         self.bulk_holdings_location = "/home/admin/Plus91Backoffice/Plus91_Backend/data/bulk_holdings"
+        self.broker = BrokerData()
+        self.master_data = self.broker.get_master_data()
+        self.master_df = pd.DataFrame(self.master_data['data'])
         self.logger = logger
 
     def fetch_ledger(self, ucc: str, from_date: str = None, to_date: str = None) -> dict:
@@ -433,18 +437,29 @@ class KeynoteDataProcessor:
         df["trading_symbol"] = df["trading_symbol"].apply(clean_symbol)
         df = df[df["isin"].notna()]
         df = df.groupby('trading_symbol', as_index=False).agg({
+            'isin': 'first',
             'quantity': 'sum',
             'market_value': 'sum'
         })
+        
+        master_df = self.master_df[["isin", "trading_symbol"]]
+        df = df.merge(master_df, on="isin", how="left")
+        df['trading_symbol_y'] = df['trading_symbol_y'].fillna(df['isin'])
+
+        df = df.drop(columns=["trading_symbol_x"], errors="ignore")
+        df = df.rename(columns={"trading_symbol_y": "trading_symbol"})
+        df = df.drop_duplicates()
 
         output_buffer = io.BytesIO()
-        try:
-            with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False)
-            output_buffer.seek(0)
-        except Exception as e:
-            self.logger.error(f"Error writing Excel for client {client_code}: {e}")
-            return
+
+        if df.empty:
+            self.logger.warning(f"Empty DataFrame for client {client_code}. Uploading empty file with headers.")
+            empty_df = pd.DataFrame(columns=df.columns)
+            empty_df.to_excel(output_buffer, index=False)
+        else:
+            df.to_excel(output_buffer, index=False)
+
+        output_buffer.seek(0)
 
         s3_key = f"PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{client_code}/holdings/{file_date_str}.xlsx"
         try:
@@ -495,9 +510,9 @@ class KeynoteDataProcessor:
         if not files:
             self.logger.info(f"No bulk holdings files found in folder {self.bulk_holdings_location} matching the required naming format.")
             return
-
+        
         for filename in files:
-            full_path = os.path.join(self, filename)
+            full_path = os.path.join(self.bulk_holdings_location, filename)
             self.logger.info(f"Processing bulk holdings file: {full_path}")
             try:
                 self.process_bulk_holdings_to_s3(full_path, bucket_name)
@@ -566,7 +581,7 @@ class ZerodhaDataFetcher:
             month: int,
             broker_code: str,
             as_dataframe=True
-            ) -> Dict:
+            ) -> Tuple[Dict, str]:
         """
         Fetch the latest holdings XLSX file for a given month and year for a broker_code.
         Returns raw bytes if as_dataframe=False, or a list of pandas DataFrames if True.
@@ -595,6 +610,15 @@ class ZerodhaDataFetcher:
             return None
 
         latest_file = max(holdings_files, key=lambda x: x[1])
+
+        snapshot_date = ""
+        match = re.search(r'(\d{4}-\d{2}-\d{2})', latest_file[0])
+        if match:
+            snapshot_date = match.group(1)
+        else:
+            logger.warning(f"Could not extract date from file name: {latest_file}")
+            snapshot_date = None
+
         file_bytes = self._get_s3_file_bytes(latest_file[0])
         if file_bytes is None:
             return None
@@ -619,21 +643,18 @@ class ZerodhaDataFetcher:
         }
         df = df.rename(columns=new_column_names).drop(columns=0).fillna("blank")
         df = df[df["Unrealized P&L Pct"] != "blank"].reset_index(drop=True).drop(index=0).reset_index(drop=True)
-        return df.to_dict()
+        return df.to_dict(), snapshot_date
 
 
-
-if __name__ == "__main__":
-    fetcher = ZerodhaDataFetcher()
-
-
-    keynote = KeynoteApi()
+# if __name__ == "__main__":
+#     fetcher = ZerodhaDataFetcher()
+#     keynote = KeynoteApi()
 
 
-    # holdingsexample = asyncio.run(keynote.fetch_holding(for_date="2023-01-31", ucc="SG102"))
-    # df = pd.DataFrame(holdingsexample)
-    # print(df)
+#     # holdingsexample = asyncio.run(keynote.fetch_holding(for_date="2023-01-31", ucc="SG102"))
+#     # df = pd.DataFrame(holdingsexample)
+#     # print(df)
 
-    ledgerexample = asyncio.run(keynote.fetch_ledger(from_date="2022-04-01", to_date="2025-03-28", ucc="MK100"))
-    ledger_df = pd.DataFrame(ledgerexample)
-    ledger_df.to_csv("LEDGER_MK100_1.csv")
+#     ledgerexample = asyncio.run(keynote.fetch_ledger(from_date="2022-04-01", to_date="2025-03-28", ucc="MK100"))
+#     ledger_df = pd.DataFrame(ledgerexample)
+#     ledger_df.to_csv("LEDGER_MK100_1.csv")

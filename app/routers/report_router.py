@@ -36,13 +36,15 @@ async def send_report(data: RequestData, db: AsyncSession = Depends(get_db)):
             result_clients = await db.execute(stmt_clients)
             joint_clients = result_clients.scalars().all()
             joint_broker_codes = [c.broker_code for c in joint_clients]
+            sorted_codes = sorted(joint_broker_codes)
+            broker_codes_str = " - ".join(sorted_codes)
             joint_report = service.get_latest_report(joint_broker_codes, is_joint=True)
             if joint_report:
-                joint_reports.append((joint_report, f"JointAccount_{joint_account.joint_account_id}_report.pdf"))
+                joint_reports.append((joint_report, f"[{broker_codes_str}] Report.pdf"))
 
         reports = []
         if single_report:
-            reports.append((single_report, f"{client.broker_code}_report.pdf"))
+            reports.append((single_report, f"[{client.broker_code}] Report.pdf"))
         reports.extend(joint_reports)
 
         if reports:

@@ -83,12 +83,29 @@ class ReportService:
     def send_reports_email(self, email: str, reports: list):
         """Send an email with the reports as attachments."""
         msg = MIMEMultipart()
-        msg['From'] = " pratham@plus91.co"
+        msg['From'] = "pratham@plus91.co"
         msg['To'] = email
-        msg['Subject'] = "Latest Reports"
-        body = "This mail is to test the report mailing to the clients. Incorrect values " \
-        "will be corrected in sometime."
-        msg.attach(MIMEText(body, 'plain'))
+        msg['Subject'] = "Portfolio Performance Reports"
+
+        body = """
+        <html>
+            <body>
+                <t>Dear Client,<br><br>
+                We hope this email finds you well. Attached are your latest portfolio performance reports. 
+                Please review these reports at your convenience and feel free to reach out to us should you have any questions or require further clarification.<br><br>
+                Thank you for trusting <b>PLUS91 Asset Management</b>. We remain committed to helping you achieve your financial goals.<br><br>
+                Warm regards,<br>
+                <b>Pratham Raghani</b><br>
+                <b>Business Development Manager</b><br>
+                <b>PLUS91 Asset Management</b><br>
+                +91 72089 45475<br>
+                pratham@plus91.co
+                </p>
+            </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(body, 'html'))
 
         for report_data, filename in reports:
             attachment = MIMEApplication(report_data, _subtype="pdf")
@@ -99,5 +116,3 @@ class ReportService:
             server.starttls()
             server.login(msg['From'], "feok yolq wqgs ieoo")
             server.send_message(msg)
-        
-    

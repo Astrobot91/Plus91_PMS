@@ -40,9 +40,6 @@ class CashflowProgressionProcessor:
             portfolio_values, month_ends = await self.get_portfolio_values(account_id, 'single')
             cash_balances = await self.cashflow_processor.get_month_end_cash_balances(account, month_ends)
 
-            print(f"PORTFOLIO VALUES: {portfolio_values}")
-            print(f"CASH BALANCES: {cash_balances}")
-
             data = []
             for month_end in month_ends:
                 portfolio_value = portfolio_values.get(month_end, 0)
@@ -287,10 +284,7 @@ class CashflowProgressionProcessor:
         product = reduce(lambda x, y: x * y, cagrs)
 
         cagr_value = 0
-        years_value = self._calculate_years(
-            start_date=str(cashflow_progression_df_v1['event_date'].iloc[0].date()),
-            end_date=str(cashflow_progression_df_v1['event_date'].iloc[-1].date())
-            )
+        years_value = self._calculate_years(abs_twrr_df=abs_twrr_df)
         if years_value > 1:
             cagr_value = ((product ** (1 / years_value)) - 1) * 100
         return abs_twrr_df, round(absolute_twrr * 100, 2), round(twrr * 100, 2), round(cagr_value, 2)
@@ -446,6 +440,12 @@ class CashflowProgressionProcessor:
                 if abs(first_row['portfolio_plus_cash'] - expected_ppc) > 1e-2:
                     new_cashflow_progression_df.loc[0, 'portfolio_plus_cash'] = expected_ppc
             
+            month_end_mask = (
+                (new_cashflow_progression_df['event_date'] == new_cashflow_progression_df['event_date'] + pd.offsets.MonthEnd(0)) & 
+                (new_cashflow_progression_df['portfolio'] == 0)
+            )
+            new_cashflow_progression_df.loc[month_end_mask, 'portfolio'] = new_cashflow_progression_df.loc[month_end_mask, 'portfolio_plus_cash']
+        
             cashflow_progression_df = new_cashflow_progression_df[new_cashflow_progression_df['portfolio_plus_cash'] != 0]
             cashflow_progression_df = pd.concat([cashflow_progression_df, last_row], ignore_index=True)
 
@@ -561,7 +561,10 @@ class CashflowProgressionProcessor:
                 expected_ppc = first_row['portfolio'] + next_month_cashflow
                 if abs(first_row['portfolio_plus_cash'] - expected_ppc) > 1e-2:
                     new_cashflow_progression_df.loc[0, 'portfolio_plus_cash'] = expected_ppc
-            
+
+            if new_cashflow_progression_df['cashflow'].sum() == 0:
+                new_cashflow_progression_df['portfolio_plus_cash'].iloc[0] = new_cashflow_progression_df['portfolio'].iloc[0]
+
             cashflow_progression_df = new_cashflow_progression_df[new_cashflow_progression_df['portfolio_plus_cash'] != 0]
             cashflow_progression_df = pd.concat([cashflow_progression_df, last_row], ignore_index=True)
 
@@ -614,16 +617,27 @@ class CashflowProgressionProcessor:
             financial_year_dataframes.append(fy_df)
         return financial_year_dataframes
 
-    def _calculate_years(self, start_date: str, end_date: str):
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        years = end_date.year - start_date.year
-        months_diff = end_date.month - start_date.month
-        days_diff = end_date.day - start_date.day
-        
-        if months_diff < 0 or (months_diff == 0 and days_diff < 0):
-            years -= 1
-            months_diff += 12
-        fraction_of_year = months_diff / 12 + days_diff / 365.25
-        return years + fraction_of_year
+    def _calculate_years(self, abs_twrr_df: pd.DataFrame) -> float:
+        """
+        Calculate the total number of investment years based on the sub-periods in the TWRR DataFrame.
+
+        This function calculates the time difference (in years) for each sub-period by subtracting 
+        the `start_date` from the `end_date`. It then sums up the years for all rows where `returns` 
+        is not equal to 0.
+
+        Args:
+            abs_twrr_df (pd.DataFrame): A DataFrame containing sub-period data with the following columns:
+                - start_date: The start date of the sub-period.
+                - end_date: The end date of the sub-period.
+                - returns: The return for the sub-period.
+
+        Returns:
+            float: The total number of investment years for all sub-periods where `returns` != 0.
+        """
+        abs_twrr_df['start_date'] = pd.to_datetime(abs_twrr_df['start_date'])
+        abs_twrr_df['end_date'] = pd.to_datetime(abs_twrr_df['end_date'])
+
+        abs_twrr_df['years'] = (abs_twrr_df['end_date'] - abs_twrr_df['start_date']).dt.days / 365.25
+        years_value = abs_twrr_df.loc[abs_twrr_df['returns'] != 0, 'years'].sum()
+        return years_value
         

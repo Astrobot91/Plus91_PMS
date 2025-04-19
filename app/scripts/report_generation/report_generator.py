@@ -49,7 +49,7 @@ def load_bse500_data():
             "instrument_type": instrument_type
         }
         time.sleep(1)
-        bse500_data = BrokerData.historical_data(instrument)
+        bse500_data = BrokerData.historical_data(broker_type='upstox', instrument=instrument)
         bse500_data = bse500_data['data']
         bse500_df = pd.DataFrame(bse500_data)
         if not bse500_df.empty:
@@ -57,7 +57,7 @@ def load_bse500_data():
             store_dfs.append(bse500_df)
         else:
             print("dataset is empty")
-        
+
         complete_bse500_data = pd.concat(store_dfs, ignore_index=True)
         complete_bse500_data['datetime'] = pd.to_datetime(complete_bse500_data['datetime'])
         complete_bse500_data['datetime'] = complete_bse500_data['datetime'].dt.date
@@ -84,6 +84,10 @@ def calculate_years(start_date: str, end_date: str):
 def get_bse500_twrr_cagr(acc_start_date: str, snapshot_date: str, bse500_df: pd.DataFrame):
     acc_start_date = pd.to_datetime(acc_start_date)
     snapshot_date = pd.to_datetime(snapshot_date)
+    if acc_start_date > snapshot_date:
+        logger.error("Account start date cannot be after snapshot date.")
+        return 0, 0, 0
+
     bse500_df['datetime'] = pd.to_datetime(bse500_df['datetime'])
     bse500_df = bse500_df[
         (bse500_df['datetime'] >= acc_start_date) &
@@ -92,16 +96,15 @@ def get_bse500_twrr_cagr(acc_start_date: str, snapshot_date: str, bse500_df: pd.
     bse500_df['year'] = bse500_df['datetime'].dt.year
     bse500_df['month'] = bse500_df['datetime'].dt.month
     bse500_df['day'] = bse500_df['datetime'].dt.day
-
     march_values = []
     for year, year_group in bse500_df.groupby('year'):
         for month, month_group in year_group.groupby('month'):
             for day, day_group in month_group.groupby('day'):
-                if month == 4 and day == 1:
-                    march_values.append(month_group.iloc[-1])
+                if month == 3:
+                    selected_row = month_group.sort_values(by='day').iloc[-1]
+                    march_values.append(selected_row)
 
     march_df = pd.DataFrame(march_values)
-
     first_row = bse500_df.iloc[[0]]
     last_row = bse500_df.iloc[[-1]]
 
@@ -117,7 +120,7 @@ def get_bse500_twrr_cagr(acc_start_date: str, snapshot_date: str, bse500_df: pd.
     bse500_df = bse500_df[bse500_df['end_value'] != 0]
     bse500_df['Returns'] = (bse500_df['end_value'] / bse500_df['start_value']) - 1
     bse500_df['Returns+1'] = bse500_df['Returns'] + 1
-
+    
     absolute_twrr = ((bse500_df['end_value'].iloc[-1] / bse500_df['start_value'].iloc[0]) - 1) * 100
     current_year_twrr = bse500_df['Returns'].iloc[-1] * 100
     
@@ -145,16 +148,28 @@ def get_returns_table(
         plus91_absolute_cagr: float = 0,
         bse500_current_year_twrr: float = 0,
         bse500_absolute_twrr: float = 0,
-        bse500_absolute_cagr: float = 0
-    ) -> pd.DataFrame:
+        bse500_absolute_cagr: float = 0,
+        snapshot_date: str = ""
+    ) -> pd.DataFrame: 
+
+    snapshot_dt = datetime.strptime(snapshot_date, "%Y-%m-%d").date()
+    if snapshot_dt.month >= 4:
+        fiscal_start = snapshot_dt.year
+        fiscal_end = snapshot_dt.year + 1
+    else:
+        fiscal_start = snapshot_dt.year - 1
+        fiscal_end = snapshot_dt.year
+
+    fiscal_label = f"FY {str(fiscal_start)[-2:]}-{str(fiscal_end)[-2:]}"
+
     returns_data = {
     'RETURNS': ['PLUS91', 'BSE500'],
-    'FY 24-25': [f'{round(plus91_current_year_twrr, 1)}%', f'{round(bse500_current_year_twrr, 1)}%'],
+    fiscal_label: [f'{round(plus91_current_year_twrr, 1)}%', f'{round(bse500_current_year_twrr, 1)}%'],
     'ABSOLUTE RETURNS': [f'{round(plus91_absolute_twrr, 1)}%', f'{round(bse500_absolute_twrr, 1)}%'],
     'SINCE INCEPTION CAGR': [f'{round(plus91_absolute_cagr, 1)}%', f'{round(bse500_absolute_cagr, 1)}%']
     }
     returns_df = pd.DataFrame(returns_data)
-    returns_df.replace('0%', 'NA', inplace=True)
+    returns_df.replace(to_replace=['0%', '0.0%'], value='NA', inplace=True)
     return returns_df
 
 def get_portfolio_report(
@@ -177,12 +192,13 @@ def get_portfolio_report(
     actual_portfolio = actual_portfolio.sort_values(by='MARKET VALUE', ascending=False)
 
     logger.debug(f"Cash value: {cash_value}, Total holdings: {total_holdings}")
+
     if pd.isna(cash_value) or pd.isna(total_holdings) or total_holdings == 0:
         logger.warning("Invalid cash_value or total_holdings, setting cash ASSETS to 0%")
         cash_percentage = 0
     else:
         cash_percentage = int((cash_value / total_holdings) * 100)
-
+    print("CASH PERCENTAGE: ", cash_percentage)
     merge_data = {
         'SECURITY': ['TOTAL HOLDINGS VALUE', 'CASH', 'TOTAL PORTFOLIO VALUE'],
         'QUANTITY': [0, 0, 0],
@@ -193,7 +209,7 @@ def get_portfolio_report(
         ],
         'ASSETS': [
             '0%', 
-            f'{int(((cash_percentage) * 100))}%', 
+            f'{int((cash_percentage))}%', 
             '0%'
         ]
     }
@@ -212,8 +228,10 @@ def generate_report(
         down_design_path: str,
         account_name: str,
         broker_code: str,
-        acc_start_date: str
+        acc_start_date: str,
+        snapshot_date: str
     ) -> bytes:
+
     page_width = 18
     base_page_height = 20
     page_dpi = 50
@@ -304,11 +322,21 @@ def generate_report(
     #############################################################################################################
     twrr_values = [returns_df[col].tolist() for col in returns_df.columns]
 
+    snapshot_dt = datetime.strptime(snapshot_date, "%Y-%m-%d").date()
+    if snapshot_dt.month >= 4:
+        fiscal_start = snapshot_dt.year
+        fiscal_end = snapshot_dt.year + 1
+    else:
+        fiscal_start = snapshot_dt.year - 1
+        fiscal_end = snapshot_dt.year
+
+    fiscal_label = f"FY {str(fiscal_start)[-2:]}-{str(fiscal_end)[-2:]}"
+
     fig.add_trace(
         go.Table(
             columnwidth=[0.25, 0.25, 0.25, 0.25],
             header=dict(
-                values=["<b>RETURNS</b>", "<b>FY 24-25 %</b>", "<b>ABSOLUTE RETURNS %</b>", "<b>SINCE INCEPTION CAGR %</b>"],
+                values=["<b>RETURNS</b>", f"<b>{fiscal_label} %</b>", "<b>ABSOLUTE RETURNS %</b>", "<b>SINCE INCEPTION CAGR %</b>"],
                 fill_color='rgba(211, 211, 211, 0.2)',
                 align='center',
                 line_color='black',
@@ -423,10 +451,10 @@ def generate_report(
     )
 
     # ADD AS OF: HEADING
-    today_date = date.today().strftime('%d-%m-%Y')
+    # today_date = date.today().strftime('%d-%m-%Y')
     fig.add_annotation(
         x=0.02, y=0.968,
-        text=f'AS OF: {today_date}',
+        text=f'AS OF: {snapshot_date}',
         showarrow=False,
         font=dict(family='Arial', size=19, color='black'),
         yanchor='top',
