@@ -24,7 +24,7 @@ def combine_python_files(start_path: str, output_file: str) -> None:
             outfile.write(f"# Generated on: {datetime.datetime.now()}\n")
             outfile.write(f"# Source directory: {start_path}\n\n")
             
-            # Walk through directory
+            # Walk through directory=
             for root, dirs, files in os.walk(start_path):
                 # Skip __pycache__ and virtual environment directories
                 dirs[:] = [d for d in dirs if d not in ['__pycache__', 'venv', '.venv', '.git']]

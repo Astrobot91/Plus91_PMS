@@ -457,7 +457,7 @@ class KeynoteDataProcessor:
             empty_df = pd.DataFrame(columns=df.columns)
             empty_df.to_excel(output_buffer, index=False)
         else:
-            df.to_excel(output_buffer, index=False)
+            df.to_excel(output_buffer, index=False) 
 
         output_buffer.seek(0)
 

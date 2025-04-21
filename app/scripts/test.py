@@ -17,21 +17,22 @@ zerodha_data_transformer = ZerodhaDataTransformer()
 #     broker_code="TWV350"
 # ))
 
-# holdings = asyncio.run(keynote_data_transformer.transform_holdings_to_actual_portfolio(
-#     broker_code="MK100",
-#     for_date="2025-04-11"
-# ))
-# holding_df = pd.DataFrame(holdings)
-# print(holding_df)
-
-
-# zerodha_data_transformer = ZerodhaDataTransformer()
-holdings, a = asyncio.run(zerodha_data_transformer.transform_holdings_to_actual_portfolio(
-    broker_code="RXU639",
-    year=2025,
-    month=3,
+holdings, a = asyncio.run(keynote_data_transformer.transform_holdings_to_actual_portfolio(
+    broker_code="YM007",
+    for_date="2024-12-01"
 ))
-print(holdings, a)
+print(holdings)
+holding_df = pd.DataFrame(holdings)
+print(holding_df)
+
+
+# # zerodha_data_transformer = ZerodhaDataTransformer()
+# holdings, a = asyncio.run(zerodha_data_transformer.transform_holdings_to_actual_portfolio(
+#     broker_code="RXU639",
+#     year=2025,
+#     month=3,
+# ))
+# print(holdings, a)
 
 
 # cashflow = asyncio.run(zerodha_data_transformer.transform_ledger_to_cashflow(
