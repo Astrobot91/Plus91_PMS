@@ -27,73 +27,11 @@ async def runner():
         async with AsyncSessionLocal() as db:
             accounts_data = await AccountService.get_single_accounts_with_broker_info(db)
 
-            # accounts_data = [
-                # {
-                #     "account_id": "ACC_000505",
-                #     "broker_code": "GB2876",
-                #     "broker_name": "zerodha",
-                #     "acc_start_date": "2024-10-01"
-                # }
-                # {
-                #     "account_id": "ACC_000325",
-                #     "broker_code": "FS7741",
-                #     "broker_name": "zerodha",
-                #     "acc_start_date": "2022-11-01"        
-                # },
-                # {
-                #     "account_id": "ACC_000326",
-                #     "broker_code": "RXU639",
-                #     "broker_name": "zerodha",
-                #     "acc_start_date": "2022-11-01"     
-                # }
-            # # #     # {
-            # # #     #     "account_id": "ACC_000325",
-            # # #     #     "broker_code": "RXU639",
-            # # #     #     "broker_name": "zerodha",
-            # # #     #     "acc_start_date": "2022-11-01" 
-            # # #     # },
-            # # #     # {
-            # # #     #     "account_id": "ACC_000326",
-            # # #     #     "broker_code": "GB2876",
-            # # #     #     "broker_name": "zerodha",
-            # # #     #     "acc_start_date": "2024-10-06" 
-            # # #     # },
-            # # #     # {
-            # # #     #     "account_id": "ACC_000505",
-            # # #     #     "broker_code": "FS7741",
-            # # #     #     "broker_name": "zerodha",
-            # # #     #     "acc_start_date": "2022-11-01" 
-            # # #     # }
-            # ]
-
-            # if not accounts_data:
-            #     logger.warning("No single accounts found.")
-            #     return
+            if not accounts_data:
+                logger.warning("No single accounts found.")
+                return
             
             joint_accounts = await JointAccountService.get_joint_accounts_with_single_accounts(db)
-
-            # joint_accounts = [{
-            #     'joint_account_id': 'JACC_000011',
-            #     'single_accounts': [{
-            #         'account_id': 'ACC_000505',
-            #         'acc_start_date': '2024-10-01',
-            #         'broker_code': 'GB2876',
-            #         'broker_name': 'zerodha'
-            #     }, {
-            #         'account_id': 'ACC_000325',
-            #         'acc_start_date': '2022-11-01',
-            #         'broker_code': 'FS7741',
-            #         'broker_name': 'zerodha'
-            #     },
-            #     {
-            #         'account_id': 'ACC_000326',
-            #         'acc_start_date': '2022-11-01',
-            #         'broker_code': 'RXU639',
-            #         'broker_name': 'zerodha'
-            #     }]
-            # }]
-
-            # joint_accounts = []
 
             if not joint_accounts:
                 logger.warning("No joint accounts found.")

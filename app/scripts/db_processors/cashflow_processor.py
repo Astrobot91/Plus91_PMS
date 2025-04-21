@@ -299,7 +299,6 @@ class CashflowProcessor:
             else:
                 balance = 0.0
             result[monthend_date.date()] = balance
-        # shifted_result = {key + timedelta(days=1): value for key, value in result.items()}
         return result
 
     async def calculate_invested_amt(self, account_id: str, account_type: str) -> float:
@@ -357,78 +356,5 @@ if __name__ == "__main__":
         async with AsyncSessionLocal() as db:
             keynote_transformer = KeynoteDataTransformer()
             zerodha_transformer = ZerodhaDataTransformer()
-
-            # processor = CashflowProcessor(db, keynote_transformer, zerodha_transformer)
-
-            # accounts = [
-            #     {"account_id": "ACC_000303", "broker_name": "keynote", "acc_start_date": "2022-04-01", "broker_code": "MK100"},
-            #     {"account_id": "ACC_000308", "broker_name": "zerodha", "acc_start_date": "2022-02-01", "broker_code": "BLQ476"}
-            # ]
-
-            # joint_accounts = [{
-            #     'joint_account_id': 'JACC_000012',
-            #     'single_accounts': [{
-            #         'account_id': 'ACC_000312',
-            #         'acc_start_date': '2022-05-01',
-            #         'broker_code': 'MDK705',
-            #         'broker_name': 'zerodha'
-            #     }, {
-            #         'account_id': 'ACC_000313',
-            #         'acc_start_date': '2022-05-01',
-            #         'broker_code': 'MM5525',
-            #         'broker_name': 'zerodha'
-            #     }]
-            # }]
-
-            # await processor.initialize(accounts, joint_accounts)
-
-            # Example account and month-end dates
-            # account = {
-            #     "account_id": "ACC_000303",
-            #     "broker_name": "keynote",
-            #     "acc_start_date": "2022-04-01",
-            #     "broker_code": "MK100"
-            # }
-
-            # month_ends = [
-            #     datetime(2022, 4, 30),
-            #     datetime(2022, 5, 31),
-            #     datetime(2022, 6, 30),
-            #     datetime(2022, 7, 31),
-            #     datetime(2022, 8, 31),
-            #     datetime(2022, 9, 30),
-            #     datetime(2022, 10, 31),
-            #     datetime(2022, 11, 30),
-            #     datetime(2022, 12, 31),
-            #     datetime(2023, 1, 31),
-            #     datetime(2023, 2, 28),
-            #     datetime(2023, 3, 31),
-            #     datetime(2023, 4, 30),
-            #     datetime(2023, 5, 31),
-            #     datetime(2023, 6, 30),
-            #     datetime(2023, 7, 31),
-            #     datetime(2023, 8, 31),
-            #     datetime(2023, 9, 30),
-            #     datetime(2023, 10, 31),
-            #     datetime(2023, 11, 30),
-            #     datetime(2023, 12, 31),
-            #     datetime(2024, 1, 31),
-            #     datetime(2024, 2, 29),
-            #     datetime(2024, 3, 31),
-            #     datetime(2024, 4, 30),
-            #     datetime(2024, 5, 31),
-            #     datetime(2024, 6, 30),
-            #     datetime(2024, 7, 31),
-            #     datetime(2024, 8, 31),
-            #     datetime(2024, 9, 30),
-            #     datetime(2024, 10, 31),
-            #     datetime(2024, 11, 30),
-            #     datetime(2024, 12, 31),
-            #     datetime(2025, 1, 31),
-            #     datetime(2025, 2, 28),
-            #     datetime(2025, 3, 31)
-            # ]
-            # balances = await processor.get_month_end_cash_balances(account, month_ends)
-            # print("Month-end cash balances:", balances)
 
     asyncio.run(main())
