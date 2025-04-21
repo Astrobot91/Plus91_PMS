@@ -27,11 +27,21 @@ async def runner():
         async with AsyncSessionLocal() as db:
             accounts_data = await AccountService.get_single_accounts_with_broker_info(db)
 
+            accounts_data = [
+                {
+                    'account_id': "ACC_000385",
+                    'broker_name': "keynote",
+                    'acc_start_date': "2024-12-01",
+                    'broker_code': "YM007"
+                }
+            ]
+
             if not accounts_data:
                 logger.warning("No single accounts found.")
                 return
             
             joint_accounts = await JointAccountService.get_joint_accounts_with_single_accounts(db)
+            joint_accounts = []
 
             if not joint_accounts:
                 logger.warning("No joint accounts found.")

@@ -145,7 +145,6 @@ class KeynoteDataTransformer:
             obj['Key'] for obj in response['Contents']
             if obj['Key'].endswith('.xlsx') and month_prefix in obj['Key']
         ]
-
         if not files:
             logger.warning(f"No files found for {year}-{month:02d} in S3 for {broker_code}")
             return None
@@ -157,6 +156,7 @@ class KeynoteDataTransformer:
         obj = s3.get_object(Bucket=bucket_name, Key=latest_file)
         file_content = obj['Body'].read()
         holdings_df = pd.read_excel(BytesIO(file_content))
+        holdings_df = holdings_df[~holdings_df["isin"].isin([0, '0'])]
         holdings_df = holdings_df.groupby("trading_symbol")[["quantity", "market_value"]].sum().reset_index()
         logger.info(f"Processed S3 data from {latest_date} for {broker_code}")
         return holdings_df.to_dict(), latest_date
