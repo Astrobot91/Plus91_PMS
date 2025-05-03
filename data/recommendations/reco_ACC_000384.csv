@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+ST078,keynote,GPTINFRA,4.0,SELL,
+ST078,keynote,SHRIRAMFIN,20.0,BUY,
+ST078,keynote,SPANDANA,145.0,SELL,
+ST078,keynote,PNB,37.0,BUY,
+ST078,keynote,RECLTD,19.0,BUY,
+ST078,keynote,LIQUIDBEES,28.0,SELL,Total EXIT
+ST078,keynote,BANKBARODA,319.0,BUY,Total ENTRY
+ST078,keynote,PFC,22.0,BUY,

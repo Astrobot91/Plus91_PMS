@@ -1,0 +1,12 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+MB048,keynote,DEEPAKFERT,49.0,SELL,
+MB048,keynote,GPTHEALTH,195.0,SELL,
+MB048,keynote,AXISBANK,101.0,BUY,Total ENTRY
+MB048,keynote,VEDL,22.0,SELL,
+MB048,keynote,GPTINFRA,177.0,BUY,
+MB048,keynote,KPIGREEN,15.0,SELL,
+MB048,keynote,PYRAMID,606.0,SELL,
+MB048,keynote,MANGCHEFER,154.0,SELL,
+MB048,keynote,BBL,6.0,SELL,
+MB048,keynote,SPANDANA,56.0,SELL,
+MB048,keynote,VHLTD,1619.0,BUY,Total ENTRY

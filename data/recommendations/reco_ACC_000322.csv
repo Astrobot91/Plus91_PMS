@@ -1,0 +1,19 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+TS020,keynote,VEDL,2.0,BUY,
+TS020,keynote,SHRIRAMFIN,41.0,BUY,
+TS020,keynote,RECLTD,18.0,BUY,
+TS020,keynote,DEEPAKFERT,85.0,SELL,
+TS020,keynote,AXISBANK,10.0,SELL,
+TS020,keynote,GPTINFRA,127.0,BUY,
+TS020,keynote,KPIGREEN,1.0,BUY,
+TS020,keynote,MANGCHEFER,284.0,SELL,
+TS020,keynote,BBL,5.0,SELL,
+TS020,keynote,SPANDANA,195.0,SELL,
+TS020,keynote,PNB,56.0,BUY,
+TS020,keynote,VHLTD,2009.0,BUY,Total ENTRY
+TS020,keynote,LIQUIDBEES,4.0,SELL,Total EXIT
+TS020,keynote,BHARTIARTL,2.0,BUY,
+TS020,keynote,GPTHEALTH,290.0,SELL,
+TS020,keynote,PYRAMID,200.0,SELL,
+TS020,keynote,BANKBARODA,7.0,BUY,
+TS020,keynote,PFC,29.0,BUY,

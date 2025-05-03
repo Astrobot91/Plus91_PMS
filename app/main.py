@@ -4,7 +4,7 @@ from app.routers.clients_router import (
     client_router, distributor_router, broker_router
 )
 from app.routers.accounts_router import (
-    account_router, joint_account_router
+    account_router, joint_account_router, account_allocations_router
 )
 from app.routers.portfolios_router import portfolio_router
 from app.routers.report_router import report_router
@@ -49,6 +49,7 @@ app.include_router(joint_account_router)
 app.include_router(account_router)
 app.include_router(report_router)
 app.include_router(accounts_data_router)
+app.include_router(account_allocations_router)
 
 
 @app.get("/", summary="Root Endpoint")

@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+JS001,other,DEEPAKFERT,1039.0,SELL,
+JS001,other,GPTHEALTH,5646.0,SELL,
+JS001,other,AXISBANK,200.0,SELL,
+JS001,other,GPTINFRA,12026.0,BUY,
+JS001,other,KPIGREEN,428.0,SELL,
+JS001,other,PYRAMID,3659.0,SELL,
+JS001,other,BBL,129.0,SELL,
+JS001,other,SPANDANA,3052.0,BUY,

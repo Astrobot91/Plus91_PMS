@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+AS140,keynote,GPTINFRA,233.0,BUY,
+AS140,keynote,SHRIRAMFIN,37.0,BUY,
+AS140,keynote,SPANDANA,147.0,SELL,
+AS140,keynote,PNB,32.0,BUY,
+AS140,keynote,RECLTD,10.0,BUY,
+AS140,keynote,BANKBARODA,44.0,BUY,
+AS140,keynote,PFC,18.0,BUY,
+AS140,keynote,BHARTIARTL,2.0,BUY,

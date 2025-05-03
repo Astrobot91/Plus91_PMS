@@ -165,7 +165,7 @@ class KeynoteDataProcessor:
         self.bulk_ledger_location = "/home/admin/Plus91Backoffice/Plus91_Backend/data/bulk_ledgers"
         self.bulk_holdings_location = "/home/admin/Plus91Backoffice/Plus91_Backend/data/bulk_holdings"
         self.broker = BrokerData()
-        self.master_data = self.broker.get_master_data()
+        self.master_data = self.broker.get_master_data(broker_type='upstox')
         self.master_df = pd.DataFrame(self.master_data['data'])
         self.logger = logger
 
@@ -208,8 +208,20 @@ class KeynoteDataProcessor:
 
         header = combined_rows[0]
         data_rows = combined_rows[1:]
-        df = pl.DataFrame(data_rows, schema=header)
-        return df.to_dicts()
+        
+        try:
+            # First attempt: Use pandas instead of polars since it handles mixed types better
+            df = pd.DataFrame(data_rows, columns=header)
+            return df.to_dict(orient='records')
+        except Exception as e:
+            self.logger.warning(f"Error using pandas: {e}. Trying with polars with strict=False...")
+            try:
+                # Second attempt: Use polars with strict=False
+                df = pl.DataFrame(data_rows, schema=header, strict=False)
+                return df.to_dicts()
+            except Exception as e2:
+                self.logger.error(f"Error creating DataFrame: {e2}")
+                return {}
 
     def _process_file(self, file_path, client_code, start_date, end_date):
         """
@@ -573,6 +585,7 @@ class ZerodhaDataFetcher:
         df["Credit"] = pd.to_numeric(df["Credit"].replace("blank", 0), errors='coerce')
         df["Debit"] = pd.to_numeric(df["Debit"].replace("blank", 0), errors='coerce')
         df["Net Balance"] = pd.to_numeric(df["Net Balance"].replace("blank", 0), errors="coerce")
+        df = df[~df["Particulars"].isin(['Opening Balance', 'Closing Balance'])].reset_index(drop=True)
         return df.to_dict()
 
     def get_holdings(
@@ -646,15 +659,22 @@ class ZerodhaDataFetcher:
         return df.to_dict(), snapshot_date
 
 
-# if __name__ == "__main__":
-#     fetcher = ZerodhaDataFetcher()
-#     keynote = KeynoteApi()
-
-
-#     # holdingsexample = asyncio.run(keynote.fetch_holding(for_date="2023-01-31", ucc="SG102"))
-#     # df = pd.DataFrame(holdingsexample)
-#     # print(df)
-
-#     ledgerexample = asyncio.run(keynote.fetch_ledger(from_date="2022-04-01", to_date="2025-03-28", ucc="MK100"))
-#     ledger_df = pd.DataFrame(ledgerexample)
-#     ledger_df.to_csv("LEDGER_MK100_1.csv")
+if __name__ == "__main__":
+    try:
+        print("Starting portfolio data processing...")
+        fetcher = ZerodhaDataFetcher()
+        keynote = KeynoteDataProcessor()
+        
+        print("Attempting to fetch ledger for RC038...")
+        ledgerexample = keynote.fetch_ledger(ucc="RC038")
+        if ledgerexample:
+            print(f"Successfully fetched ledger with {len(ledgerexample)} entries")
+            ledger_df = pd.DataFrame(ledgerexample)
+            ledger_df.to_csv("LEDGER_RC038.csv")
+            print(f"Saved ledger to LEDGER_RC038.csv")
+        else:
+            print("No ledger data returned")
+    except Exception as e:
+        import traceback
+        print(f"Error occurred: {e}")
+        traceback.print_exc()

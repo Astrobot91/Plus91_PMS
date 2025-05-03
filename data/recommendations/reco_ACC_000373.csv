@@ -1,0 +1,11 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+BS066,keynote,DEEPAKFERT,218.0,BUY,Total ENTRY
+BS066,keynote,GPTHEALTH,380.0,SELL,
+BS066,keynote,AXISBANK,78.0,BUY,Total ENTRY
+BS066,keynote,PYRAMID,248.0,SELL,
+BS066,keynote,GPTINFRA,247.0,SELL,
+BS066,keynote,KPIGREEN,4.0,SELL,
+BS066,keynote,SPANDANA,123.0,SELL,
+BS066,keynote,BBL,31.0,BUY,Total ENTRY
+BS066,keynote,VHLTD,1062.0,SELL,Total EXIT
+BS066,keynote,LIQUIDBEES,283.0,SELL,Total EXIT

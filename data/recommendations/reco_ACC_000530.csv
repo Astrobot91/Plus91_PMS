@@ -1,0 +1,13 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+JS055,keynote,DEEPAKFERT,80.0,SELL,
+JS055,keynote,GPTHEALTH,318.0,SELL,
+JS055,keynote,AXISBANK,12.0,SELL,
+JS055,keynote,VEDL,235.0,BUY,
+JS055,keynote,GPTINFRA,50.0,SELL,
+JS055,keynote,KPIGREEN,16.0,BUY,
+JS055,keynote,PYRAMID,200.0,SELL,
+JS055,keynote,MANGCHEFER,267.0,SELL,
+JS055,keynote,BBL,1.0,SELL,
+JS055,keynote,SPANDANA,176.0,SELL,
+JS055,keynote,VHLTD,1577.0,BUY,Total ENTRY
+JS055,keynote,LIQUIDBEES,1.0,SELL,Total EXIT

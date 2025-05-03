@@ -9,7 +9,7 @@ from typing import Dict, Optional, Tuple
 from app.logger import logger
 
 broker_data = BrokerData()
-master_data = broker_data.get_master_data()
+master_data = broker_data.get_master_data(broker_type='upstox')
 upstox_master_df = pd.DataFrame(master_data["data"]) if master_data and "data" in master_data else pd.DataFrame()
 
 
@@ -117,8 +117,7 @@ class KeynoteDataTransformer:
         ) -> Optional[Tuple[Dict, str]]:
         """
         Transform holdings data into actual portfolio format.
-        First attempts to fetch data from the Keynote API, and if that fails,
-        falls back to fetching the latest data from S3 for the same month and year.
+        Fetches data from the latest available date in the same month as requested.
 
         Args:
             broker_code (str): The UCC (e.g., 'MK100').
@@ -127,39 +126,47 @@ class KeynoteDataTransformer:
         Returns:
             Optional[Dict]: A dictionary with aggregated holdings data or None if no data is found.
         """
-        bucket_name = 'plus91backoffice'
-        prefix = f"PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{broker_code}/holdings/"
+        try:
+            bucket_name = 'plus91backoffice'
+            prefix = f"PLUS91_PMS/ledgers_and_holdings/keynote/single_accounts/{broker_code}/holdings/"
+            
+            for_date_dt = datetime.strptime(for_date, "%Y-%m-%d")
+            year = for_date_dt.year
+            month = for_date_dt.month
+            month_prefix = f"{year}-{month:02d}-"
 
-        for_date_dt = datetime.strptime(for_date, "%Y-%m-%d")
-        year = for_date_dt.year
-        month = for_date_dt.month
-        month_prefix = f"{year}-{month:02d}-"
+            s3 = boto3.client('s3')
+            response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+            if 'Contents' not in response:
+                logger.warning(f"No holdings files found in S3 for {broker_code}")
+                return None
 
-        s3 = boto3.client('s3')
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-        if 'Contents' not in response:
-            logger.warning(f"No files found in S3 at {prefix}")
+            files = [
+                obj['Key'] for obj in response['Contents']
+                if obj['Key'].endswith('.xlsx') and month_prefix in obj['Key']
+            ]
+
+            if not files:
+                logger.warning(f"No holdings files found for {year}-{month:02d} in S3 for {broker_code}")
+                return None
+
+            latest_file = max(files, key=lambda x: x.split('/')[-1].replace('.xlsx', ''))
+            latest_date = latest_file.split('/')[-1].replace('.xlsx', '')
+            logger.info(f"Found latest file: {latest_file} for {broker_code}")
+
+            obj = s3.get_object(Bucket=bucket_name, Key=latest_file)
+            file_content = obj['Body'].read()
+            holdings_df = pd.read_excel(BytesIO(file_content))
+            
+            holdings_df = holdings_df[~holdings_df["isin"].isin([0, '0'])]
+            holdings_df = holdings_df.groupby("trading_symbol")[["quantity", "market_value"]].sum().reset_index()
+            
+            logger.info(f"Processed S3 data from {latest_date} for {broker_code}")
+            return holdings_df.to_dict(), latest_date
+
+        except Exception as e:
+            logger.error(f"Error processing holdings for {broker_code}: {e}")
             return None
-
-        files = [
-            obj['Key'] for obj in response['Contents']
-            if obj['Key'].endswith('.xlsx') and month_prefix in obj['Key']
-        ]
-        if not files:
-            logger.warning(f"No files found for {year}-{month:02d} in S3 for {broker_code}")
-            return None
-
-        latest_file = max(files, key=lambda x: x.split('/')[-1].replace('.xlsx', ''))
-        latest_date = latest_file.split('/')[-1].replace('.xlsx', '')
-        logger.info(f"Found latest file: {latest_file} for {broker_code}")
-
-        obj = s3.get_object(Bucket=bucket_name, Key=latest_file)
-        file_content = obj['Body'].read()
-        holdings_df = pd.read_excel(BytesIO(file_content))
-        holdings_df = holdings_df[~holdings_df["isin"].isin([0, '0'])]
-        holdings_df = holdings_df.groupby("trading_symbol")[["quantity", "market_value"]].sum().reset_index()
-        logger.info(f"Processed S3 data from {latest_date} for {broker_code}")
-        return holdings_df.to_dict(), latest_date
 
 
 class ZerodhaDataTransformer:

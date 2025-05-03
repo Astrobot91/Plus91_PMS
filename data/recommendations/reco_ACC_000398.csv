@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+KM002,finflo,DEEPAKFERT,96.0,SELL,
+KM002,finflo,GPTHEALTH,414.0,SELL,
+KM002,finflo,AXISBANK,16.0,SELL,
+KM002,finflo,GPTINFRA,190.0,SELL,
+KM002,finflo,KPIGREEN,6.0,BUY,
+KM002,finflo,PYRAMID,1281.0,BUY,Total ENTRY
+KM002,finflo,BBL,3.0,SELL,
+KM002,finflo,SPANDANA,203.0,SELL,
+KM002,finflo,LIQUIDBEES,104.0,SELL,Total EXIT

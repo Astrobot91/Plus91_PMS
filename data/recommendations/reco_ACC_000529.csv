@@ -1,0 +1,6 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+PS092,keynote,GPTINFRA,15.0,BUY,
+PS092,keynote,SHRIRAMFIN,2.0,BUY,
+PS092,keynote,SPANDANA,20.0,SELL,
+PS092,keynote,BANKBARODA,1.0,SELL,
+PS092,keynote,PFC,1.0,BUY,

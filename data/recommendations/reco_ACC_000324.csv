@@ -1,0 +1,13 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+TK008,keynote,DEEPAKFERT,254.0,BUY,Total ENTRY
+TK008,keynote,GPTHEALTH,3622.0,SELL,
+TK008,keynote,AXISBANK,90.0,BUY,Total ENTRY
+TK008,keynote,VEDL,411.0,BUY,Total ENTRY
+TK008,keynote,GPTINFRA,1016.0,SELL,
+TK008,keynote,KPIGREEN,59.0,SELL,
+TK008,keynote,PYRAMID,566.0,SELL,
+TK008,keynote,MANGCHEFER,750.0,BUY,Total ENTRY
+TK008,keynote,BBL,12.0,SELL,
+TK008,keynote,SPANDANA,493.0,SELL,
+TK008,keynote,VHLTD,1457.0,BUY,Total ENTRY
+TK008,keynote,LIQUIDBEES,95.0,SELL,Total EXIT

@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+MP071,keynote,DEEPAKFERT,46.0,SELL,
+MP071,keynote,GPTHEALTH,475.0,SELL,
+MP071,keynote,AXISBANK,16.0,SELL,
+MP071,keynote,GPTINFRA,24.0,BUY,
+MP071,keynote,KPIGREEN,22.0,SELL,
+MP071,keynote,PYRAMID,145.0,SELL,
+MP071,keynote,BBL,6.0,SELL,
+MP071,keynote,SPANDANA,63.0,SELL,

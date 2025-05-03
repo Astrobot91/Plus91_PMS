@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+DJ001,finflo,GPTINFRA,20.0,BUY,
+DJ001,finflo,SHRIRAMFIN,34.0,BUY,
+DJ001,finflo,SPANDANA,96.0,SELL,
+DJ001,finflo,PNB,71.0,BUY,
+DJ001,finflo,RECLTD,92.0,BUY,
+DJ001,finflo,LIQUIDBEES,49.0,SELL,Total EXIT
+DJ001,finflo,BANKBARODA,34.0,BUY,
+DJ001,finflo,PFC,80.0,BUY,
+DJ001,finflo,BHARTIARTL,2.0,BUY,

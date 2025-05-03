@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from app.models.clients.client_details import Client
 from app.models.clients.broker_details import Broker
@@ -11,6 +11,10 @@ from app.schemas.clients.client_details import (
     BulkClientResponse,
     BulkClientResult,
 )
+from app.models.accounts.account_ideal_portfolio import AccountIdealPortfolio
+from app.models.accounts.account_actual_portfolio import AccountActualPortfolio
+from app.models.accounts.account_performance import AccountPerformance
+from app.models.accounts.joint_account_mapping import JointAccountMapping
 from app.logger import logger, log_function_call
 
 class ClientService:
@@ -207,7 +211,6 @@ class ClientService:
                         client_obj.addr = row.addr.strip()
                     if row.acc_start_date is not None:
                         client_obj.acc_start_date = row.acc_start_date
-                        print("ACC_START_DATE: ", row.acc_start_date)
                     if row.distributor_name is not None:
                         dist_id = await ClientService._get_distributor_id(db, row.distributor_name)
                         client_obj.distributor_id = dist_id
@@ -255,11 +258,8 @@ class ClientService:
 
     @staticmethod
     @log_function_call
-    async def bulk_delete_clients(
-        db: AsyncSession,
-        client_ids: List[str]
-    ) -> BulkClientResponse:
-        """Bulk delete clients with partial success, also deleting associated single accounts."""
+    async def bulk_delete_clients(db: AsyncSession, client_ids: List[str]) -> BulkClientResponse:
+        """Bulk delete clients with partial success, also deleting associated single accounts and their dependencies."""
         logger.info(f"Starting bulk delete for {len(client_ids)} clients")
         total = len(client_ids)
         results: List[BulkClientResult] = []
@@ -282,6 +282,42 @@ class ClientService:
                         continue
 
                     if client_obj.account_id:
+                        joint_check = select(JointAccountMapping).where(
+                            JointAccountMapping.account_id == client_obj.account_id
+                        )
+                        joint_result = await db.execute(joint_check)
+                        joint_mappings = joint_result.scalars().all()
+                        
+                        if joint_mappings:
+                            detail = f"Cannot delete: Account {client_obj.account_id} is part of {len(joint_mappings)} joint account(s)"
+                            results.append(BulkClientResult(
+                                row_index=row_index,
+                                status="failed",
+                                detail=detail
+                            ))
+                            logger.warning(f"Row {row_index} - {detail}")
+                            continue
+
+                        account_id = client_obj.account_id
+                        
+                        ideal_del = delete(AccountIdealPortfolio).where(
+                            AccountIdealPortfolio.owner_id == account_id,
+                            AccountIdealPortfolio.owner_type == "single"
+                        )
+                        await db.execute(ideal_del)
+                        
+                        actual_del = delete(AccountActualPortfolio).where(
+                            AccountActualPortfolio.owner_id == account_id,
+                            AccountActualPortfolio.owner_type == "single"
+                        )
+                        await db.execute(actual_del)
+                        
+                        perf_del = delete(AccountPerformance).where(
+                            AccountPerformance.owner_id == account_id,
+                            AccountPerformance.owner_type == "single"
+                        )
+                        await db.execute(perf_del)
+                        
                         single_acc = await db.get(SingleAccount, client_obj.account_id)
                         if single_acc:
                             await db.delete(single_acc)

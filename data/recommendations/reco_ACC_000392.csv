@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+KM032,keynote,GPTINFRA,1025.0,BUY,Total ENTRY
+KM032,keynote,SHRIRAMFIN,9.0,BUY,
+KM032,keynote,SPANDANA,53.0,SELL,
+KM032,keynote,PNB,6.0,BUY,
+KM032,keynote,RECLTD,8.0,BUY,
+KM032,keynote,LIQUIDBEES,71.0,SELL,Total EXIT
+KM032,keynote,BANKBARODA,5.0,SELL,
+KM032,keynote,PFC,9.0,BUY,
+KM032,keynote,BHARTIARTL,1.0,SELL,

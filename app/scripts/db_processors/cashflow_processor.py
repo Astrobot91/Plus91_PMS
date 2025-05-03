@@ -271,7 +271,6 @@ class CashflowProcessor:
                 date_col = "event_date"
                 balance_col = "runbal"
                 balances = self.get_month_end_balances(ledger_df, date_col, balance_col, month_ends, broker_name)
-
             else:
                 logger.warning(f"Unknown broker {broker_name} for account {account_id}")
                 return None
@@ -285,7 +284,7 @@ class CashflowProcessor:
 
     def get_month_end_balances(self, ledger_df: pd.DataFrame, date_col, balance_col, month_ends, broker_name):
         ledger_df[date_col] = pd.to_datetime(ledger_df[date_col])
-        ledger_df = ledger_df.sort_values(by=date_col)
+        ledger_df = ledger_df.sort_values(by=date_col, kind='mergesort')  
         month_ends = [pd.to_datetime(me) for me in month_ends]
         dates = ledger_df[date_col].values
         dates = [pd.Timestamp(date) for date in dates]
@@ -306,7 +305,8 @@ class CashflowProcessor:
         try:
             sum_query = select(func.sum(AccountCashflow.cashflow)).where(
                 AccountCashflow.owner_id == account_id,
-                AccountCashflow.owner_type == account_type
+                AccountCashflow.owner_type == account_type,
+                AccountCashflow.tag != "fees"
             )
             result = await self.db.execute(sum_query)
             invested_amt = result.scalar() or 0.0

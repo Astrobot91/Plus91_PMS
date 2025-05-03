@@ -38,6 +38,7 @@ class ViewAccount(BaseModel):
     cagr: Optional[float] = Field(None, description="Compound annual growth rate")
 
     created_at: Optional[str] = Field(None, description="Timestamp of account creation, in ISO format")
+    latest_snapshot_date: Optional[str] = Field(None, description="Latest date from account_actual_portfolio, in ISO format")
 
     class Config:
         json_encoders = {

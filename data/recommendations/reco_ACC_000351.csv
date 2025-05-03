@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+VD029,keynote,GPTINFRA,7.0,SELL,
+VD029,keynote,MANGCHEFER,1.0,SELL,Total EXIT
+VD029,keynote,SHRIRAMFIN,27.0,BUY,
+VD029,keynote,SPANDANA,90.0,SELL,
+VD029,keynote,PNB,48.0,BUY,
+VD029,keynote,RECLTD,27.0,BUY,
+VD029,keynote,LIQUIDBEES,72.0,SELL,Total EXIT
+VD029,keynote,BANKBARODA,429.0,BUY,Total ENTRY
+VD029,keynote,PFC,29.0,BUY,

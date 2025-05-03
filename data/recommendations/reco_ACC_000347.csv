@@ -1,0 +1,8 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+PK001,finflo,GPTINFRA,51.0,SELL,
+PK001,finflo,SHRIRAMFIN,20.0,BUY,
+PK001,finflo,SPANDANA,94.0,SELL,
+PK001,finflo,PNB,22.0,BUY,
+PK001,finflo,RECLTD,85.0,BUY,
+PK001,finflo,PFC,21.0,BUY,
+PK001,finflo,BHARTIARTL,1.0,SELL,

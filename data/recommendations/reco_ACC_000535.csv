@@ -1,0 +1,8 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+PS093,keynote,GPTINFRA,52.0,BUY,
+PS093,keynote,SHRIRAMFIN,5.0,BUY,
+PS093,keynote,SPANDANA,26.0,SELL,
+PS093,keynote,PNB,15.0,SELL,
+PS093,keynote,RECLTD,3.0,SELL,
+PS093,keynote,BANKBARODA,11.0,SELL,
+PS093,keynote,BHARTIARTL,2.0,SELL,

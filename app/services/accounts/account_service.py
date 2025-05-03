@@ -46,6 +46,27 @@ class AccountService:
         joint_accounts = joint_result.scalars().all()
         logger.info(f"Retrieved {len(joint_accounts)} joint accounts.")
 
+        # Get latest snapshot dates for all accounts
+        logger.info("Fetching latest snapshot dates for all accounts...")
+        from app.models.accounts.account_actual_portfolio import AccountActualPortfolio
+        latest_snapshot_query = (
+            select(
+                AccountActualPortfolio.owner_id,
+                AccountActualPortfolio.owner_type,
+                func.max(AccountActualPortfolio.snapshot_date).label("latest_snapshot_date")
+            )
+            .group_by(
+                AccountActualPortfolio.owner_id,
+                AccountActualPortfolio.owner_type
+            )
+        )
+        latest_snapshot_result = await db.execute(latest_snapshot_query)
+        latest_snapshots = {
+            (row.owner_id, row.owner_type): row.latest_snapshot_date
+            for row in latest_snapshot_result.all()
+        }
+        logger.info(f"Retrieved latest snapshot dates for {len(latest_snapshots)} accounts.")
+
         logger.info("Combining single and joint accounts into a unified view...")
         unified_view: List[ViewAccount] = []
 
@@ -55,6 +76,8 @@ class AccountService:
             total_twrr = acc.performance.total_twrr if acc.performance else None
             current_yr_twrr = acc.performance.current_yr_twrr if acc.performance else None
             cagr = acc.performance.cagr if acc.performance else None
+            latest_snapshot_date = latest_snapshots.get((acc.single_account_id, "single"))
+            latest_snapshot_date_str = latest_snapshot_date.isoformat() if latest_snapshot_date else None
 
             unified_view.append(
                 ViewAccount(
@@ -71,6 +94,7 @@ class AccountService:
                     current_yr_twrr=current_yr_twrr,
                     cagr=cagr,
                     created_at=acc.created_at.isoformat() if acc.created_at else None,
+                    latest_snapshot_date=latest_snapshot_date_str,
                 )
             )
 
@@ -80,6 +104,8 @@ class AccountService:
             total_twrr = acc.performance.total_twrr if acc.performance else None
             current_yr_twrr = acc.performance.current_yr_twrr if acc.performance else None
             cagr = acc.performance.cagr if acc.performance else None
+            latest_snapshot_date = latest_snapshots.get((acc.joint_account_id, "joint"))
+            latest_snapshot_date_str = latest_snapshot_date.isoformat() if latest_snapshot_date else None
 
             unified_view.append(
                 ViewAccount(
@@ -96,6 +122,7 @@ class AccountService:
                     current_yr_twrr=current_yr_twrr,
                     cagr=cagr,
                     created_at=acc.created_at.isoformat() if acc.created_at else None,
+                    latest_snapshot_date=latest_snapshot_date_str,
                 )
             )
 

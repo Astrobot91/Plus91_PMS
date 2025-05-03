@@ -1,0 +1,17 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+PR030,keynote,VEDL,118.0,BUY,
+PR030,keynote,SHRIRAMFIN,47.0,BUY,
+PR030,keynote,RECLTD,47.0,BUY,
+PR030,keynote,DEEPAKFERT,117.0,SELL,
+PR030,keynote,AXISBANK,53.0,SELL,
+PR030,keynote,GPTINFRA,192.0,SELL,
+PR030,keynote,KPIGREEN,13.0,BUY,
+PR030,keynote,MANGCHEFER,416.0,SELL,
+PR030,keynote,BBL,18.0,BUY,
+PR030,keynote,SPANDANA,148.0,SELL,
+PR030,keynote,PNB,88.0,BUY,
+PR030,keynote,VHLTD,2266.0,BUY,Total ENTRY
+PR030,keynote,GPTHEALTH,47.0,SELL,
+PR030,keynote,PYRAMID,353.0,SELL,
+PR030,keynote,BANKBARODA,5.0,BUY,
+PR030,keynote,PFC,51.0,BUY,

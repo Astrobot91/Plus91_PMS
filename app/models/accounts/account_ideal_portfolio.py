@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, TIMESTAMP, Text, func, Date
+from sqlalchemy import Column, Integer, String, Float, TIMESTAMP, Text, func, Date, CheckConstraint
 from app.models.accounts.owner_mixin import OwnerMixin
 from sqlalchemy.orm import relationship
 from app.models.base import Base
@@ -11,11 +11,18 @@ class AccountIdealPortfolio(Base):
     owner_type = Column(String, nullable=False)
     snapshot_date = Column(Date, primary_key=True)
     trading_symbol = Column(Text, primary_key=True)
-    basket = Column(Text, nullable=False)
+    basket = Column(Text, primary_key=True)
     allocation_pct = Column(Float, nullable=False)
     investment_amount = Column(Float, nullable=False)
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
     updated_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+    __table_args__ = (
+        CheckConstraint(
+            "owner_type IN ('single', 'joint')", 
+            name="ideal_portfolio_owner_type_check"
+        ),
+    )
 
     single_account = relationship(
         "SingleAccount",
@@ -24,6 +31,7 @@ class AccountIdealPortfolio(Base):
                     "AccountIdealPortfolio.owner_type=='single')",
         overlaps="ideal_portfolios,joint_account"
     )
+    
     joint_account = relationship(
         "JointAccount",
         back_populates="ideal_portfolios",

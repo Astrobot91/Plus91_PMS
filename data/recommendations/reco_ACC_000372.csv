@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+VS096,keynote,GPTINFRA,4.0,BUY,
+VS096,keynote,SHRIRAMFIN,19.0,BUY,
+VS096,keynote,SPANDANA,56.0,SELL,
+VS096,keynote,PNB,36.0,BUY,
+VS096,keynote,RECLTD,18.0,BUY,
+VS096,keynote,LIQUIDBEES,57.0,SELL,Total EXIT
+VS096,keynote,BANKBARODA,282.0,BUY,Total ENTRY
+VS096,keynote,PFC,20.0,BUY,

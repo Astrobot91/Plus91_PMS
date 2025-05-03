@@ -1,0 +1,11 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+YB001,other,DEEPAKFERT,94.0,SELL,
+YB001,other,GPTHEALTH,58.0,BUY,
+YB001,other,AXISBANK,16.0,SELL,
+YB001,other,GPTINFRA,165.0,BUY,
+YB001,other,KPIGREEN,5.0,BUY,
+YB001,other,PYRAMID,235.0,BUY,
+YB001,other,BBL,3.0,SELL,
+YB001,other,SPANDANA,138.0,SELL,
+YB001,other,VHLTD,848.0,SELL,Total EXIT
+YB001,other,LIQUIDBEES,1.0,SELL,Total EXIT

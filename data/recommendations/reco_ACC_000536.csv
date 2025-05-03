@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+RC038,keynote,GPTINFRA,134.0,BUY,
+RC038,keynote,SHRIRAMFIN,14.0,BUY,
+RC038,keynote,SPANDANA,657.0,BUY,Total ENTRY
+RC038,keynote,PNB,17.0,SELL,
+RC038,keynote,RECLTD,3.0,SELL,
+RC038,keynote,BANKBARODA,330.0,BUY,Total ENTRY
+RC038,keynote,PFC,3.0,BUY,
+RC038,keynote,BHARTIARTL,2.0,SELL,

@@ -8,9 +8,12 @@ class BrokerData:
     BASE_URL = "http://0.0.0.0:8001/api/v1/"
     
     @staticmethod
-    def get_master_data() -> Dict:
+    def get_master_data(broker_type: str) -> Dict:
         """
-        Fetches the master data from the Upstox API.
+        Fetches the master data from the broker API.
+        
+        Args:
+            broker_type (str): The broker type (e.g., 'upstox').
         
         Returns:
             The JSON response from the API as a Python dictionary.
@@ -20,17 +23,18 @@ class BrokerData:
         """
         url = f"{BrokerData.BASE_URL}master-data"
         headers = {"Content-Type": "application/json"}
-        response = requests.get(url, params={"broker_type": "upstox"}, headers=headers)
+        response = requests.get(url, params={"broker_type": broker_type}, headers=headers)
         if response.status_code != 200:
             raise Exception(f"Failed to get master data: {response.status_code} - {response.text}")
         return response.json()
     
     @staticmethod
-    def get_ltp_quote(instruments: List[Dict[str, str]]) -> Dict:
+    def get_ltp_quote(broker_type: str, instruments: List[Dict[str, str]]) -> Dict:
         """
         Fetches the Last Traded Price (LTP) quote for the given instruments.
         
         Args:
+            broker_type (str): The broker type (e.g., 'upstox').
             instruments: A list of dictionaries, each with 'exchange_token' and 'exchange' keys.
         
         Returns:
@@ -41,7 +45,12 @@ class BrokerData:
         """
         url = f"{BrokerData.BASE_URL}ltp-quote"
         headers = {"Content-Type": "application/json"}
-        response = requests.post(url, json=instruments, headers=headers)
+        response = requests.post(
+            url, 
+            json=instruments, 
+            headers=headers,
+            params={"broker_type": broker_type}
+        )
         if response.status_code != 200:
             raise Exception(f"Failed to get LTP quote: {response.status_code} - {response.text}")
         return response.json()

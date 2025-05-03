@@ -1,0 +1,11 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+RG027,keynote,DEEPAKFERT,77.0,SELL,
+RG027,keynote,GPTHEALTH,335.0,SELL,
+RG027,keynote,AXISBANK,79.0,BUY,Total ENTRY
+RG027,keynote,GPTINFRA,169.0,SELL,
+RG027,keynote,KPIGREEN,3.0,BUY,
+RG027,keynote,PYRAMID,221.0,SELL,
+RG027,keynote,SPANDANA,101.0,SELL,
+RG027,keynote,BBL,31.0,BUY,Total ENTRY
+RG027,keynote,VHLTD,240.0,SELL,Total EXIT
+RG027,keynote,LIQUIDBEES,34.0,SELL,Total EXIT

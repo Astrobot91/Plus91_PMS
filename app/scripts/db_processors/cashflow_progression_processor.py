@@ -24,7 +24,7 @@ class CashflowProgressionProcessor:
         self.db = db
         self.cashflow_processor = cashflow_processor
 
-    async def get_month_end_portfolio_df(self, account: dict) -> pd.DataFrame:
+    async def get_month_end_portfolio_df(self, account: dict, month_ends: list) -> pd.DataFrame:
         """Generate a DataFrame with month-end portfolio values (portfolio + cash balance) for an account."""
         account_id = account['account_id']
         account_type = account['account_type']
@@ -32,7 +32,6 @@ class CashflowProgressionProcessor:
 
         if account_type == 'single':
             acc_start_date = account['acc_start_date']
-            month_ends = _generate_historical_month_ends(acc_start_date, today)
             if not month_ends:
                 logger.warning(f"No month-end dates for account {account_id}")
                 return pd.DataFrame(columns=['event_date', 'portfolio'])
@@ -55,8 +54,7 @@ class CashflowProgressionProcessor:
                 return pd.DataFrame(columns=['event_date', 'portfolio'])
 
             earliest_start_date = min(acc['acc_start_date'] for acc in single_accounts)
-            earliest_start_date
-            month_ends = _generate_historical_month_ends(earliest_start_date, today)
+
             if not month_ends:
                 logger.warning(f"No month-end dates for joint account {account_id}")
                 return pd.DataFrame(columns=['event_date', 'portfolio'])
@@ -131,7 +129,7 @@ class CashflowProgressionProcessor:
             logger.error(f"Error fetching cashflow data for {owner_type} account {owner_id}: {e}")
             return pd.DataFrame(columns=['event_date', 'cashflow'])
 
-    async def get_cashflow_progression_df(self, account: dict) -> pd.DataFrame:
+    async def get_cashflow_progression_df(self, account: dict, month_ends_dict: Dict) -> pd.DataFrame:
         """Generate a DataFrame with all event dates, cashflows, and portfolio values for an account."""
         account_id = account['account_id']
         account_type = account['account_type']
@@ -144,9 +142,8 @@ class CashflowProgressionProcessor:
             progression_df = await self.get_progression_df(account_id, 'single')
             if progression_df.empty:
                 logger.warning(f"No cashflow data for single account {account_id}")
-            
-            portfolio_df = await self.get_month_end_portfolio_df(account)
 
+            portfolio_df = await self.get_month_end_portfolio_df(account, month_ends_dict.get(account_id, []))
             if portfolio_df.empty:
                 logger.warning(f"No portfolio data for single account {account_id}")
             
@@ -162,7 +159,7 @@ class CashflowProgressionProcessor:
             combined_df = combined_df.merge(progression_df, on='event_date', how='left')
             combined_df['cashflow'] = combined_df['cashflow'].fillna(0)
             combined_df = combined_df.merge(portfolio_df, on='event_date', how='left').fillna(0)
-            
+
             if account['broker_name'] == 'zerodha':
                 combined_df = combined_df[combined_df['event_date'] >= acc_start_date_monthend.date()]
 
@@ -174,11 +171,11 @@ class CashflowProgressionProcessor:
             if not single_accounts:
                 logger.warning(f"No linked single accounts for joint account {account_id}")
                 return pd.DataFrame(columns=['event_date', 'cashflow', 'portfolio'])
-            
+
             progression_dfs = []
             for single_acc in single_accounts:
                 single_acc['account_type'] = 'single'
-                df = await self.get_cashflow_progression_df(single_acc)
+                df = await self.get_cashflow_progression_df(single_acc, month_ends_dict)
                 if not df.empty:
                     progression_dfs.append(df)
             
@@ -207,7 +204,7 @@ class CashflowProgressionProcessor:
         account_type = account['account_type']
 
         if cashflow_progression_df['cashflow'].sum() == 0 and cashflow_progression_df['portfolio'].sum() == 0:
-                print(f"Skipping cashflow progression update for {account_type} account {account_id}: no meaningful data")
+                logger.warning(f"Skipping cashflow progression update for {account_type} account {account_id}: no meaningful data")
                 return
 
         await self.db.execute(
@@ -296,7 +293,6 @@ class CashflowProgressionProcessor:
         cashflow_progression_df['month'] = cashflow_progression_df['event_date'].dt.month
         cashflow_progression_df['year'] = cashflow_progression_df['event_date'].dt.year
         cashflow_progression_df['portfolio_plus_cash'] = 0
-
         grouped_df = cashflow_progression_df.groupby(['year', 'month'])
 
         monthly_cashflow_list = []

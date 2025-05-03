@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+RG007,other,GPTINFRA,301.0,BUY,
+RG007,other,SHRIRAMFIN,18.0,SELL,
+RG007,other,HDFCBANK,34.0,SELL,Total EXIT
+RG007,other,SPANDANA,39.0,BUY,
+RG007,other,PNB,118.0,BUY,
+RG007,other,RECLTD,9.0,BUY,
+RG007,other,BANKBARODA,17.0,BUY,
+RG007,other,PFC,40.0,BUY,
+RG007,other,BHARTIARTL,15.0,SELL,

@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+RB054,keynote,GPTINFRA,4.0,SELL,
+RB054,keynote,SHRIRAMFIN,31.0,BUY,
+RB054,keynote,SPANDANA,223.0,SELL,
+RB054,keynote,PNB,57.0,BUY,
+RB054,keynote,RECLTD,31.0,BUY,
+RB054,keynote,LIQUIDBEES,42.0,SELL,Total EXIT
+RB054,keynote,BANKBARODA,495.0,BUY,Total ENTRY
+RB054,keynote,PFC,35.0,BUY,
+RB054,keynote,BHARTIARTL,1.0,SELL,

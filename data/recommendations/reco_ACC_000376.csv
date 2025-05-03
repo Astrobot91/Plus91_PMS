@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+HB011,keynote,DEEPAKFERT,60.0,SELL,
+HB011,keynote,GPTHEALTH,31.0,BUY,
+HB011,keynote,AXISBANK,76.0,BUY,Total ENTRY
+HB011,keynote,GPTINFRA,96.0,SELL,
+HB011,keynote,KPIGREEN,236.0,BUY,Total ENTRY
+HB011,keynote,PYRAMID,956.0,BUY,Total ENTRY
+HB011,keynote,SPANDANA,220.0,SELL,
+HB011,keynote,BBL,30.0,BUY,Total ENTRY
+HB011,keynote,LIQUIDBEES,273.0,SELL,Total EXIT

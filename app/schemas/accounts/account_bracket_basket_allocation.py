@@ -3,7 +3,7 @@ from typing import Literal, Optional
 from datetime import datetime
 
 class AccountBracketBasketAllocationBase(BaseModel):
-    account_id: str = Field(..., description="Account ID (single or joint)")
+    accoun_id: str = Field(..., description="Account ID (single or joint)")
     account_type: Literal["single", "joint"] = Field(..., description="Type of account")
     bracket_id: int = Field(..., description="Bracket ID")
     basket_id: int = Field(..., description="Basket ID")

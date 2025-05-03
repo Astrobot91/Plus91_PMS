@@ -1,0 +1,13 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+AS139,keynote,DEEPAKFERT,81.0,SELL,
+AS139,keynote,GPTHEALTH,320.0,SELL,
+AS139,keynote,AXISBANK,97.0,BUY,
+AS139,keynote,VEDL,89.0,BUY,
+AS139,keynote,GPTINFRA,55.0,SELL,
+AS139,keynote,KPIGREEN,15.0,BUY,
+AS139,keynote,PYRAMID,214.0,SELL,
+AS139,keynote,MANGCHEFER,267.0,SELL,
+AS139,keynote,BBL,1.0,SELL,
+AS139,keynote,SPANDANA,81.0,SELL,
+AS139,keynote,VHLTD,1573.0,BUY,Total ENTRY
+AS139,keynote,LIQUIDBEES,173.0,SELL,Total EXIT

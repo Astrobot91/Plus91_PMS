@@ -1,0 +1,11 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+GT005,keynote,DEEPAKFERT,95.0,SELL,
+GT005,keynote,GPTHEALTH,400.0,SELL,
+GT005,keynote,AXISBANK,105.0,BUY,Total ENTRY
+GT005,keynote,GPTINFRA,150.0,SELL,
+GT005,keynote,KPIGREEN,9.0,BUY,
+GT005,keynote,PYRAMID,265.0,SELL,
+GT005,keynote,SPANDANA,245.0,SELL,
+GT005,keynote,BBL,42.0,BUY,Total ENTRY
+GT005,keynote,VHLTD,162.0,SELL,Total EXIT
+GT005,keynote,LIQUIDBEES,65.0,SELL,Total EXIT

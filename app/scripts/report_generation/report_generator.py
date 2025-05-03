@@ -10,59 +10,78 @@ from app.scripts.data_fetchers.broker_data import BrokerData
 from app.logger import logger
 
 def load_bse500_data():
-    day_time = []
-    last_eod_date = datetime(2020, 1, 1).date()
+    try:
+        day_time = []
+        last_eod_date = datetime(2020, 1, 1).date()
 
-    start_time_day = last_eod_date
-    current_time = datetime.now().date()
-    back_time_day = current_time - timedelta(days = 1000)
+        start_time_day = last_eod_date
+        current_time = datetime.now().date()
+        back_time_day = current_time - timedelta(days=1000)
 
-    if back_time_day < start_time_day:
-        back_time_day = start_time_day
-
-    i = 0
-    while back_time_day >= start_time_day:
-        append_time = [str(current_time), str(back_time_day), 'day']
-        day_time.append(append_time)  
-        if back_time_day == start_time_day:
-            break   
-        current_time = back_time_day
-        back_time_day = current_time - timedelta(days = 2000)
-        if current_time >= start_time_day >= back_time_day:
+        if back_time_day < start_time_day:
             back_time_day = start_time_day
-        i += 1
 
-    store_dfs = []
-    for value in day_time:
-        from_date = value[1]
-        to_date = value[0]
-        interval = value[2]
-        exchange = "BSE"
-        exchange_token = "4"
-        instrument_type = "INDEX"
-        instrument = {
-            "from_date": str(from_date),
-            "to_date": str(to_date),
-            "interval": interval,
-            "exchange": exchange,
-            "exchange_token": exchange_token,
-            "instrument_type": instrument_type
-        }
-        time.sleep(1)
-        bse500_data = BrokerData.historical_data(broker_type='upstox', instrument=instrument)
-        bse500_data = bse500_data['data']
-        bse500_df = pd.DataFrame(bse500_data)
-        if not bse500_df.empty:
-            bse500_df = bse500_df.fillna(0)
-            store_dfs.append(bse500_df)
-        else:
-            print("dataset is empty")
+        i = 0
+        while back_time_day >= start_time_day:
+            append_time = [str(current_time), str(back_time_day), 'day']
+            day_time.append(append_time)  
+            if back_time_day == start_time_day:
+                break   
+            current_time = back_time_day
+            back_time_day = current_time - timedelta(days=2000)
+            if current_time >= start_time_day >= back_time_day:
+                back_time_day = start_time_day
+            i += 1
+
+        store_dfs = []
+        for value in day_time:
+            from_date = value[1]
+            to_date = value[0]
+            interval = value[2]
+
+            exchange = "BSE"
+            exchange_token = "4"
+            instrument_type = "INDEX"
+            instrument = {
+                "from_date": str(from_date),
+                "to_date": str(to_date),
+                "interval": interval,
+                "exchange": exchange,
+                "exchange_token": exchange_token,
+                "instrument_type": instrument_type
+            }
+            time.sleep(1)
+            bse500_data = BrokerData.historical_data(broker_type='upstox', instrument=instrument)
+            
+            if not bse500_data or 'data' not in bse500_data:
+                logger.warning(f"No BSE500 data received for period {from_date} to {to_date}")
+                continue
+                
+            bse500_df = pd.DataFrame(bse500_data['data'])
+            if not bse500_df.empty:
+                bse500_df = bse500_df.fillna(0)
+                store_dfs.append(bse500_df)
+            else:
+                logger.warning(f"Empty BSE500 dataset for period {from_date} to {to_date}")
+
+        if not store_dfs:
+            logger.error("No BSE500 data available for any time period")
+            # Return a minimal DataFrame with required columns to prevent downstream errors
+            return pd.DataFrame(columns=['datetime', 'close'])
 
         complete_bse500_data = pd.concat(store_dfs, ignore_index=True)
         complete_bse500_data['datetime'] = pd.to_datetime(complete_bse500_data['datetime'])
         complete_bse500_data['datetime'] = complete_bse500_data['datetime'].dt.date
-        complete_bse500_data = complete_bse500_data.drop_duplicates().sort_values(by="datetime").reset_index()
+        complete_bse500_data = complete_bse500_data.drop_duplicates().sort_values(by="datetime").reset_index(drop=True)
+        
+        if complete_bse500_data.empty:
+            logger.warning("Final BSE500 data is empty")
+            return pd.DataFrame(columns=['datetime', 'close'])
+            
         return complete_bse500_data
+    except Exception as e:
+        logger.error(f"Error loading BSE500 data: {e}")
+        return pd.DataFrame(columns=['datetime', 'close'])
 
 def read_image_as_base64(file_path):
     with open(file_path, 'rb') as image_file:
@@ -82,55 +101,72 @@ def calculate_years(start_date: str, end_date: str):
     return years + fraction_of_year
 
 def get_bse500_twrr_cagr(acc_start_date: str, snapshot_date: str, bse500_df: pd.DataFrame):
+    if bse500_df.empty:
+        logger.warning("No BSE500 data available, returning default values")
+        return 0, 0, 0
+
     acc_start_date = pd.to_datetime(acc_start_date)
     snapshot_date = pd.to_datetime(snapshot_date)
     if acc_start_date > snapshot_date:
         logger.error("Account start date cannot be after snapshot date.")
         return 0, 0, 0
 
-    bse500_df['datetime'] = pd.to_datetime(bse500_df['datetime'])
-    bse500_df = bse500_df[
-        (bse500_df['datetime'] >= acc_start_date) &
-        (bse500_df['datetime'] <= snapshot_date)
-    ]
-    bse500_df['year'] = bse500_df['datetime'].dt.year
-    bse500_df['month'] = bse500_df['datetime'].dt.month
-    bse500_df['day'] = bse500_df['datetime'].dt.day
-    march_values = []
-    for year, year_group in bse500_df.groupby('year'):
-        for month, month_group in year_group.groupby('month'):
-            for day, day_group in month_group.groupby('day'):
-                if month == 3:
-                    selected_row = month_group.sort_values(by='day').iloc[-1]
-                    march_values.append(selected_row)
+    try:
+        bse500_df['datetime'] = pd.to_datetime(bse500_df['datetime'])
+        bse500_df = bse500_df[
+            (bse500_df['datetime'] >= acc_start_date) &
+            (bse500_df['datetime'] <= snapshot_date)
+        ]
 
-    march_df = pd.DataFrame(march_values)
-    first_row = bse500_df.iloc[[0]]
-    last_row = bse500_df.iloc[[-1]]
+        if bse500_df.empty:
+            logger.warning(f"No BSE500 data available between {acc_start_date} and {snapshot_date}")
+            return 0, 0, 0
 
-    bse500_df = pd.concat([first_row, last_row, march_df], ignore_index=False)
-    bse500_df = bse500_df[['datetime', 'close']]
-    bse500_df = bse500_df.sort_values(by='datetime').reset_index(drop=True)
+        bse500_df['year'] = bse500_df['datetime'].dt.year
+        bse500_df['month'] = bse500_df['datetime'].dt.month
+        bse500_df['day'] = bse500_df['datetime'].dt.day
+        march_values = []
 
-    bse500_df['start_date'] = bse500_df['datetime']
-    bse500_df['end_date'] = bse500_df['datetime'].shift(-1).fillna(0)
-    bse500_df['start_value'] = bse500_df['close']
-    bse500_df['end_value'] = bse500_df['close'].shift(-1).fillna(0)
-    bse500_df = bse500_df.drop(columns=['datetime', 'close'])
-    bse500_df = bse500_df[bse500_df['end_value'] != 0]
-    bse500_df['Returns'] = (bse500_df['end_value'] / bse500_df['start_value']) - 1
-    bse500_df['Returns+1'] = bse500_df['Returns'] + 1
-    
-    absolute_twrr = ((bse500_df['end_value'].iloc[-1] / bse500_df['start_value'].iloc[0]) - 1) * 100
-    current_year_twrr = bse500_df['Returns'].iloc[-1] * 100
-    
-    cagrs = list(bse500_df['Returns+1'])
-    product = reduce(lambda x, y: x * y, cagrs)
-    absolute_cagr = 0
-    years_value = calculate_years(start_date=str(acc_start_date.date()), end_date=str(snapshot_date.date()))
-    if years_value > 1:
-        absolute_cagr = ((product ** (1/years_value)) - 1) * 100
-    return round(current_year_twrr, 2), round(absolute_twrr, 2), round(absolute_cagr, 2)
+        for year, year_group in bse500_df.groupby('year'):
+            march_group = year_group[year_group['month'] == 3]
+            if not march_group.empty:
+                selected_row = march_group.sort_values(by='day').iloc[-1]
+                march_values.append(selected_row)
+
+        march_df = pd.DataFrame(march_values)
+        if not bse500_df.empty:
+            first_row = bse500_df.iloc[[0]]
+            last_row = bse500_df.iloc[[-1]]
+            bse500_df = pd.concat([first_row, last_row, march_df], ignore_index=False)
+            bse500_df = bse500_df[['datetime', 'close']]
+            bse500_df = bse500_df.sort_values(by='datetime').reset_index(drop=True)
+
+            bse500_df['start_date'] = bse500_df['datetime']
+            bse500_df['end_date'] = bse500_df['datetime'].shift(-1).fillna(0)
+            bse500_df['start_value'] = bse500_df['close']
+            bse500_df['end_value'] = bse500_df['close'].shift(-1).fillna(0)
+            bse500_df = bse500_df.drop(columns=['datetime', 'close'])
+            bse500_df = bse500_df[bse500_df['end_value'] != 0]
+            
+            if not bse500_df.empty:
+                bse500_df['Returns'] = (bse500_df['end_value'] / bse500_df['start_value']) - 1
+                bse500_df['Returns+1'] = bse500_df['Returns'] + 1
+
+                absolute_twrr = ((bse500_df['end_value'].iloc[-1] / bse500_df['start_value'].iloc[0]) - 1) * 100
+                current_year_twrr = bse500_df['Returns'].iloc[-1] * 100
+
+                cagrs = list(bse500_df['Returns+1'])
+                product = reduce(lambda x, y: x * y, cagrs)
+                absolute_cagr = 0
+                years_value = calculate_years(start_date=str(acc_start_date.date()), end_date=str(snapshot_date.date()))
+                if years_value > 1:
+                    absolute_cagr = ((product ** (1/years_value)) - 1) * 100
+                return round(current_year_twrr, 2), round(absolute_twrr, 2), round(absolute_cagr, 2)
+
+        return 0, 0, 0
+    except Exception as e:
+        logger.error(f"Error calculating BSE500 TWRR/CAGR: {e}")
+        return 0, 0, 0
 
 def get_portfolio_summary(inception_date: str, total_holdings: float, invested_amt: float) -> pd.DataFrame:
     pnl = int(total_holdings - invested_amt)

@@ -1,10 +1,13 @@
+import sys
 import asyncio
+import os
+import glob
 import pandas as pd
 from sqlalchemy import select, union, delete, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.stock_ltps import StockLTP
 from app.models.accounts.account_actual_portfolio import AccountActualPortfolio
-from app.models.accounts.account_ideal_portfolio import AccountIdealPortfolio
+from app.models.portfolio.basket_stock_mapping import BasketStockMapping
 from app.scripts.data_fetchers.broker_data import BrokerData
 from typing import List, Dict, Any
 from app.database import AsyncSessionLocal
@@ -13,13 +16,61 @@ from app.logger import logger
 
 
 class LtpProcessor:
-    def __init__(self):
+    def __init__(self, broker: str):
         """Initialize the LtpProcessor."""
+        self.broker = broker
         logger.info("Initializing LtpProcessor")
+
+    def get_latest_outside_holdings_file(self) -> str:
+        """
+        Get the path of the latest Outside holdings file based on the date in filename.
+        
+        Returns:
+            str: Path to the latest Outside holdings file, or None if no files exist
+        """
+        pattern = "/home/admin/Plus91Backoffice/Forked_Plus91_Backend/data/other_holdings/Outside_holdings_*.xlsx"
+        files = glob.glob(pattern)
+        
+        if not files:
+            logger.debug("No Outside holdings files found - continuing without them")
+            return None
+            
+        # Extract dates from filenames and find latest
+        latest_file = max(files, key=lambda f: datetime.strptime(f.split("Outside_holdings_")[1].replace(".xlsx", ""), "%Y-%m-%d"))
+        logger.debug(f"Latest Outside holdings file: {latest_file}")
+        return latest_file
+
+    def get_outside_holdings_symbols(self) -> List[str]:
+        """
+        Read trading symbols from the latest Outside holdings file.
+        
+        Returns:
+            List[str]: List of trading symbols from Outside holdings, or empty list if no file exists
+        """
+        try:
+            latest_file = self.get_latest_outside_holdings_file()
+            if not latest_file:
+                logger.debug("Proceeding without Outside holdings symbols")
+                return []
+                
+            df = pd.read_excel(latest_file)
+            if 'trading_symbol' not in df.columns:
+                logger.warning("No trading_symbol column found in Outside holdings file - proceeding without these symbols")
+                return []
+                
+            symbols = df['trading_symbol'].unique().tolist()
+            logger.debug(f"Retrieved {len(symbols)} trading symbols from Outside holdings")
+            return symbols
+        except Exception as e:
+            logger.warning(f"Error reading Outside holdings file: {str(e)} - proceeding without these symbols")
+            return []
 
     async def get_trading_symbols(self, db: AsyncSession) -> List[str]:
         """
-        Retrieve all unique trading symbols from account_actual_portfolio and account_ideal_portfolio tables.
+        Retrieve unique trading symbols from all available sources:
+        - account_actual_portfolio
+        - account_ideal_portfolio
+        - latest Outside holdings file (if available)
 
         Args:
             db (AsyncSession): The asynchronous database session to execute the query.
@@ -27,15 +78,26 @@ class LtpProcessor:
         Returns:
             List[str]: A list of unique trading symbols.
         """
-        logger.info("Fetching unique trading symbols from database")
+        logger.info("Fetching unique trading symbols from all sources")
         try:
+            # Get symbols from portfolios
             actual_symbols = select(AccountActualPortfolio.trading_symbol)
-            ideal_symbols = select(AccountIdealPortfolio.trading_symbol)
+            ideal_symbols = select(BasketStockMapping.trading_symbol)
             unique_symbols_query = union(actual_symbols, ideal_symbols)
             result = await db.execute(unique_symbols_query)
-            unique_symbols = result.scalars().all()
-            logger.debug(f"Retrieved {len(unique_symbols)} unique trading symbols")
-            return unique_symbols
+            db_symbols = result.scalars().all()
+            logger.debug(f"Retrieved {len(db_symbols)} symbols from portfolios")
+            
+            # Get symbols from Outside holdings (if available)
+            outside_symbols = self.get_outside_holdings_symbols()
+            if outside_symbols:
+                logger.debug(f"Adding {len(outside_symbols)} symbols from Outside holdings")
+            
+            # Combine all symbols and make unique
+            all_symbols = list(set(db_symbols + outside_symbols))
+            
+            logger.info(f"Total {len(all_symbols)} unique trading symbols from all available sources")
+            return all_symbols
         except Exception as e:
             logger.error(f"Error fetching trading symbols: {str(e)}")
             raise
@@ -55,34 +117,38 @@ class LtpProcessor:
         """
         logger.info(f"Fetching LTPs for {len(trading_symbols)} trading symbols")
         try:
-            upstox_master_data = BrokerData.get_master_data()
+            upstox_master_data = BrokerData.get_master_data(broker_type=self.broker)
             if upstox_master_data.get("status") != "success":
                 logger.error("Failed to fetch master data from broker")
                 raise ValueError("Failed to fetch master data from broker")
-
+        
             logger.debug("Processing master data into DataFrame")
             upstox_master_df = pd.DataFrame(upstox_master_data["data"])
-
+            print(upstox_master_df)
             upstox_master_df_slice = upstox_master_df[
-                (upstox_master_df["exchange"].isin(["NSE", "BSE"])) &
-                (upstox_master_df["instrument_type"] == "EQ")
-            ][["trading_symbol", "exchange", "exchange_token", "instrument_type"]]
-            
+                (upstox_master_df["exchange"].isin(["NSE_EQ", "BSE_EQ"]))
+            ][["tradingsymbol", "exchange", "exchange_token"]]
+
             upstox_master_df_slice_sorted = upstox_master_df_slice.sort_values(
-                by=["trading_symbol", "exchange"],
+                by=["tradingsymbol", "exchange"],
                 ascending=[True, True]
             )
             upstox_master_df_slice = upstox_master_df_slice_sorted.drop_duplicates(
-                subset="trading_symbol", keep="first"
+                subset="tradingsymbol", keep="first"
             )
             mapping_data = upstox_master_df_slice[
-                upstox_master_df_slice["trading_symbol"].isin(trading_symbols)
+                upstox_master_df_slice["tradingsymbol"].isin(trading_symbols)
             ]
+            mapping_data[['exchange', 'instrument_type']] = mapping_data['exchange'].str.split('_', expand=True)
+            mapping_data["exchange"] = mapping_data["exchange"].astype(str)
+            mapping_data["instrument_type"] = mapping_data["instrument_type"].astype(str)
+            mapping_data["exchange_token"] = mapping_data["exchange_token"].astype(str)
             mapping_data.reset_index(drop=True, inplace=True)
+
             ltp_request_data = mapping_data[["exchange_token", "exchange", "instrument_type"]].to_dict(orient="records")
-            
+
             logger.debug(f"Requesting LTP quotes for {len(ltp_request_data)} symbols")
-            ltp_response_data = BrokerData.get_ltp_quote(ltp_request_data)
+            ltp_response_data = BrokerData.get_ltp_quote(self.broker, ltp_request_data)
             if ltp_response_data.get("status") != "success":
                 logger.error("Failed to fetch LTP quotes from broker")
                 raise ValueError("Failed to fetch LTP quotes from broker")
@@ -173,7 +239,7 @@ async def main() -> None:
     """Main function to run the LTP processing."""
     logger.info("Starting main LTP processing script")
     async with AsyncSessionLocal() as db:
-        processor = LtpProcessor()
+        processor = LtpProcessor(broker='upstox')
         await processor.process_ltps(db)
     logger.info("Main LTP processing script completed")
 

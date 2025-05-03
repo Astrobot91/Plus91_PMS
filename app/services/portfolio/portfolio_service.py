@@ -1,10 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from app.models.portfolio.portfolio_template_details import PortfolioTemplate
 from app.models.portfolio.bracket_details import Bracket
 from app.models.portfolio.basket_details import Basket
 from app.models.portfolio.pf_bracket_basket_allocation import PfBracketBasketAllocation
 from app.models.portfolio.basket_stock_mapping import BasketStockMapping
+from app.models.accounts.account_bracket_basket_allocation import AccountBracketBasketAllocation
 from app.logger import logger, log_function_call
 from typing import Dict, Any, List
 
@@ -192,16 +193,45 @@ class PortfolioService:
         for oldb in all_brackets_after:
             str_id = str(oldb.bracket_id)
             if str_id not in bracket_ids_seen:
+                # --- FIX: Delete dependent AccountBracketBasketAllocation first ---
+                delete_account_alloc_stmt = delete(AccountBracketBasketAllocation).where(
+                    AccountBracketBasketAllocation.bracket_id == oldb.bracket_id
+                )
+                await db.execute(delete_account_alloc_stmt)
+                logger.debug(f"Deleted dependent AccountBracketBasketAllocations for bracket: {str_id}")
+                # --- End Fix ---
+
+                # Also delete PfBracketBasketAllocation related to this bracket
+                delete_pf_alloc_stmt = delete(PfBracketBasketAllocation).where(
+                    PfBracketBasketAllocation.bracket_id == oldb.bracket_id
+                )
+                await db.execute(delete_pf_alloc_stmt)
+                logger.debug(f"Deleted PfBracketBasketAllocations for bracket: {str_id}")
+
                 await db.delete(oldb)
                 logger.debug(f"Deleted unused bracket: {str_id}")
 
         for oldb in all_baskets_after:
             str_id = str(oldb.basket_id)
             if str_id not in basket_ids_seen:
+                 # Delete PfBracketBasketAllocation related to this basket
+                delete_pf_alloc_stmt = delete(PfBracketBasketAllocation).where(
+                    PfBracketBasketAllocation.basket_id == oldb.basket_id
+                )
+                await db.execute(delete_pf_alloc_stmt)
+                logger.debug(f"Deleted PfBracketBasketAllocations for basket: {str_id}")
+
+                # Delete BasketStockMapping related to this basket
+                delete_stock_mapping_stmt = delete(BasketStockMapping).where(
+                    BasketStockMapping.basket_id == oldb.basket_id
+                )
+                await db.execute(delete_stock_mapping_stmt)
+                logger.debug(f"Deleted BasketStockMappings for basket: {str_id}")
+
                 await db.delete(oldb)
                 logger.debug(f"Deleted unused basket: {str_id}")
 
-        await db.commit()
+        await db.commit() # Commit deletions before proceeding
 
         # Update allocations
         qb5 = await db.execute(select(Bracket))

@@ -1,0 +1,10 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+DS073,keynote,GPTINFRA,125.0,BUY,
+DS073,keynote,SHRIRAMFIN,25.0,BUY,
+DS073,keynote,SPANDANA,135.0,SELL,
+DS073,keynote,PNB,85.0,BUY,
+DS073,keynote,RECLTD,29.0,BUY,
+DS073,keynote,LIQUIDBEES,6.0,SELL,Total EXIT
+DS073,keynote,BANKBARODA,24.0,BUY,
+DS073,keynote,PFC,31.0,BUY,
+DS073,keynote,BHARTIARTL,1.0,SELL,

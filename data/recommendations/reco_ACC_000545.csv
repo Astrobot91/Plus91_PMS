@@ -1,0 +1,9 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+KS070,keynote,GPTINFRA,19.0,BUY,
+KS070,keynote,SHRIRAMFIN,13.0,BUY,
+KS070,keynote,SPANDANA,58.0,SELL,
+KS070,keynote,PNB,11.0,SELL,
+KS070,keynote,RECLTD,1.0,SELL,
+KS070,keynote,BANKBARODA,5.0,SELL,
+KS070,keynote,PFC,2.0,BUY,
+KS070,keynote,BHARTIARTL,2.0,SELL,

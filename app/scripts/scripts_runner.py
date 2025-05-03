@@ -40,7 +40,7 @@ async def main() -> None:
 
         grouped_df = report_df.groupby('account_id')
         for account_id, group in grouped_df:
-            # if account_id in ['ACC_000308']:
+            # if account_id in ['ACC_000350']:
                 logger.info(f"Generating report for account ID: {account_id}")
                 account_name = group['account_name'].iloc[0]
                 acc_start_date = group['acc_start_date'].iloc[0]
@@ -85,7 +85,6 @@ async def main() -> None:
 
                 filename = f"{formatted_broker_code} {month_abbr} {year} Report.pdf"
                 s3_key = f"PLUS91_PMS/reports/{year}/{month_abbr}/{filename}"
-                print(filename, s3_key)
                 s3.put_object(
                         Body=pdf_bytes,
                         Bucket=bucket_name,

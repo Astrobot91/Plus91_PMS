@@ -1,0 +1,19 @@
+broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
+AG063,keynote,VEDL,136.0,BUY,
+AG063,keynote,SHRIRAMFIN,55.0,BUY,
+AG063,keynote,RECLTD,54.0,BUY,
+AG063,keynote,DEEPAKFERT,182.0,SELL,
+AG063,keynote,AXISBANK,92.0,SELL,
+AG063,keynote,GPTINFRA,182.0,SELL,
+AG063,keynote,KPIGREEN,17.0,BUY,
+AG063,keynote,MANGCHEFER,459.0,SELL,
+AG063,keynote,BBL,3.0,SELL,
+AG063,keynote,SPANDANA,158.0,SELL,
+AG063,keynote,PNB,109.0,BUY,
+AG063,keynote,VHLTD,2553.0,BUY,Total ENTRY
+AG063,keynote,LIQUIDBEES,354.0,SELL,Total EXIT
+AG063,keynote,BHARTIARTL,1.0,BUY,
+AG063,keynote,GPTHEALTH,2967.0,BUY,
+AG063,keynote,PYRAMID,385.0,SELL,
+AG063,keynote,BANKBARODA,10.0,BUY,
+AG063,keynote,PFC,60.0,BUY,
