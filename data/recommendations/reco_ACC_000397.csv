@@ -1,10 +1,10 @@
 broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
-UG009,keynote,GPTINFRA,12.0,BUY,
-UG009,keynote,SHRIRAMFIN,33.0,BUY,
-UG009,keynote,SPANDANA,96.0,SELL,
-UG009,keynote,PNB,64.0,BUY,
-UG009,keynote,RECLTD,32.0,BUY,
+UG009,keynote,PFC,39.0,BUY,
+UG009,keynote,PNB,89.0,BUY,
+UG009,keynote,SPANDANA,75.0,SELL,
+UG009,keynote,RECLTD,36.0,BUY,
+UG009,keynote,GPTINFRA,84.0,BUY,
+UG009,keynote,BHARTIARTL,1.0,SELL,
+UG009,keynote,SHRIRAMFIN,28.0,BUY,
+UG009,keynote,BANKBARODA,498.0,BUY,Total ENTRY
 UG009,keynote,LIQUIDBEES,91.0,SELL,Total EXIT
-UG009,keynote,BANKBARODA,494.0,BUY,Total ENTRY
-UG009,keynote,PFC,36.0,BUY,
-UG009,keynote,BHARTIARTL,1.0,BUY,

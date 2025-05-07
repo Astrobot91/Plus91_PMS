@@ -1,10 +1,10 @@
 broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
-SG104,keynote,DEEPAKFERT,94.0,SELL,
-SG104,keynote,GPTHEALTH,319.0,SELL,
-SG104,keynote,AXISBANK,102.0,BUY,Total ENTRY
-SG104,keynote,GPTINFRA,160.0,SELL,
-SG104,keynote,KPIGREEN,8.0,BUY,
-SG104,keynote,PYRAMID,262.0,SELL,
-SG104,keynote,BBL,3.0,SELL,
-SG104,keynote,SPANDANA,241.0,SELL,
+SG104,keynote,KPIGREEN,49.0,BUY,
+SG104,keynote,SPANDANA,220.0,SELL,
+SG104,keynote,GPTHEALTH,45.0,BUY,
+SG104,keynote,PYRAMID,78.0,SELL,
+SG104,keynote,DEEPAKFERT,55.0,SELL,
+SG104,keynote,GPTINFRA,82.0,BUY,
+SG104,keynote,AXISBANK,118.0,BUY,Total ENTRY
+SG104,keynote,BBL,4.0,BUY,
 SG104,keynote,LIQUIDBEES,4.0,SELL,Total EXIT

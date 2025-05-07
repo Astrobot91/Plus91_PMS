@@ -1,11 +1,12 @@
 import asyncio
 import os
+import sys
 import glob
 import pandas as pd
 from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import and_, or_
+from sqlalchemy.sql import and_, or_, func
 from sqlalchemy.sql.expression import extract
 from app.models.stock_ltps import StockLTP
 from app.models.accounts.account_actual_portfolio import AccountActualPortfolio
@@ -140,7 +141,7 @@ class OutsideAccProcessor:
             result = await db.execute(
                 select(SingleAccount)
                 .join(Client, SingleAccount.single_account_id == Client.account_id)
-                .where(Client.broker_code == broker_code)
+                .where(Client.broker_code == broker_code.upper().strip())
             )
             account = result.scalar_one_or_none()
             
@@ -148,11 +149,24 @@ class OutsideAccProcessor:
                 logger.warning(f"No single account found for broker code {broker_code}")
                 return
 
-            # Get cash value
+            # Get cash value - use case-insensitive matching
             cash_value = self.get_cash_value(cash_df, broker_code)
+            logger.debug(f"Cash value for {broker_code}: {cash_value}")
 
-            # Calculate market values
-            account_holdings = holdings_df[holdings_df['broker_code'] == broker_code].copy()
+            # Calculate market values with case-insensitive matching
+            # First try exact match
+            account_holdings = holdings_df[holdings_df['broker_code'] == broker_code].copy()    
+            # If no matches found, try case-insensitive match
+            if account_holdings.empty:
+                logger.info(f"No exact match for broker code {broker_code}, trying case-insensitive match")
+                account_holdings = holdings_df[holdings_df['broker_code'].str.lower() == broker_code.lower()].copy()
+                if not account_holdings.empty:
+                    logger.info(f"Found {len(account_holdings)} holdings with case-insensitive match for {broker_code}")
+                else:
+                    logger.warning(f"No holdings found for broker code {broker_code} (case-insensitive)")
+            else:
+                logger.info(f"Found {len(account_holdings)} holdings with exact match for {broker_code}")
+            print(account_holdings)
             if not account_holdings.empty:
                 # Sum quantities for same trading symbols
                 account_holdings = account_holdings.drop_duplicates()
@@ -186,6 +200,7 @@ class OutsideAccProcessor:
             # Update account values - even if no holdings
             pf_value = account_holdings['market_value'].sum() if not account_holdings.empty else 0
             total_holdings = pf_value + cash_value
+            logger.info(f"Updating account {account.single_account_id} with PF: {pf_value}, Cash: {cash_value}, Total: {total_holdings}")
             
             await db.execute(
                 update(SingleAccount)
@@ -196,7 +211,6 @@ class OutsideAccProcessor:
                     total_holdings=total_holdings
                 )
             )
-                
             await db.commit()
             logger.info(f"Processed account {account.single_account_id} - PF: {pf_value}, Cash: {cash_value}, Total: {total_holdings}")
             
@@ -212,12 +226,10 @@ class OutsideAccProcessor:
         try:
             # Get all single accounts in this joint account
             single_accounts = await self.joint_acc_service.get_linked_single_accounts(db, joint_account.joint_account_id)
-            broker_codes = [acc['broker_code'] for acc in single_accounts if acc['broker_code']]
-            
+            broker_codes = [acc['broker_code'].lower() for acc in single_accounts if acc['broker_code']]
             # Calculate total cash for all linked accounts
             total_cash = sum(self.get_cash_value(cash_df, code) for code in broker_codes)
             logger.debug(f"Total cash for joint account {joint_account.joint_account_id}: {total_cash}")
-            
             # Aggregate holdings for all single accounts
             joint_holdings = holdings_df[holdings_df['broker_code'].isin(broker_codes)].copy()
             if not joint_holdings.empty:
@@ -262,7 +274,6 @@ class OutsideAccProcessor:
                     total_holdings=total_holdings
                 )
             )
-                
             await db.commit()
             logger.info(f"Processed joint account {joint_account.joint_account_id} - PF: {pf_value}, Cash: {total_cash}, Total: {total_holdings}")
             
@@ -275,17 +286,40 @@ class OutsideAccProcessor:
         """Main method to process outside holdings."""
         logger.info("Starting outside holdings processing")
         try:
-            # Get latest file
+            # Use a specific file instead of getting the latest
             file_info = self.get_latest_outside_holdings_file()
             if not file_info:
                 logger.warning("No outside holdings file found - exiting")
                 return
                 
             file_path, file_date = file_info
+            file_path = "/home/admin/Plus91Backoffice/Plus91_Backend/data/other_holdings/Outside_holdings_2025-03-25.xlsx"
+            file_date = datetime.strptime("2025-03-25", "%Y-%m-%d")
+            if not os.path.exists(file_path):
+                logger.error(f"File not found: {file_path}")
+                return
+                
+            logger.info(f"Using specified holdings file: {file_path} with date {file_date}")
             
             # Load Excel sheets
+            logger.info(f"Loading data from {file_path}")
             holdings_df = pd.read_excel(file_path, sheet_name='pf')
             cash_df = pd.read_excel(file_path, sheet_name='cash')
+            
+            # Normalize broker codes in dataframes - convert to lowercase and strip spaces
+            if 'broker_code' in holdings_df.columns:
+                holdings_df['broker_code'] = holdings_df['broker_code'].astype(str).str.lower().str.strip()
+                logger.info("Normalized broker codes in holdings dataframe")
+            
+            if 'broker_code' in cash_df.columns:
+                cash_df['broker_code'] = cash_df['broker_code'].astype(str).str.lower().str.strip()
+                logger.info("Normalized broker codes in cash dataframe")
+            
+            # Log the unique broker codes in the file to help with debugging
+            unique_brokers_holdings = holdings_df['broker_code'].unique().tolist()
+            unique_brokers_cash = cash_df['broker_code'].unique().tolist()
+            logger.info(f"Unique broker codes in holdings file: {unique_brokers_holdings}")
+            logger.info(f"Unique broker codes in cash file: {unique_brokers_cash}")
             
             # Load LTPs
             await self.load_ltps(db)
@@ -299,7 +333,11 @@ class OutsideAccProcessor:
             )
             single_accounts = result.scalars().all()
             
+            logger.info(f"Found {len(single_accounts)} single accounts to process (excluding Zerodha and Keynote)")
+            
+            processed_count = 0
             for account in single_accounts:
+                print(account)
                 # Get broker_code from Client table
                 client_result = await db.execute(
                     select(Client.broker_code)
@@ -308,15 +346,29 @@ class OutsideAccProcessor:
                 broker_code = client_result.scalar_one_or_none()
                 
                 if broker_code:
+                    # Normalize broker code to lowercase and strip whitespace
+                    broker_code = broker_code.lower().strip()
+                    print(broker_code)
+                    logger.info(f"Processing single account {account.single_account_id} with normalized broker code '{broker_code}'")
                     await self.process_single_account(db, holdings_df, broker_code, file_date, cash_df)
+                    processed_count += 1
+                else:
+                    logger.warning(f"No broker code found for single account {account.single_account_id}")
+            
+            logger.info(f"Processed {processed_count} out of {len(single_accounts)} single accounts")
             
             # Process joint accounts (excluding those with Zerodha/Keynote accounts)
             result = await db.execute(select(JointAccount))
             joint_accounts = result.scalars().all()
             
+            logger.info(f"Found {len(joint_accounts)} joint accounts to check")
+            
+            joint_processed_count = 0
             for joint_account in joint_accounts:
                 # Get linked single accounts and their brokers
                 linked_accounts = await self.joint_acc_service.get_linked_single_accounts(db, joint_account.joint_account_id)
+                
+                logger.info(f"Joint account {joint_account.joint_account_id} has {len(linked_accounts)} linked single accounts")
                 
                 # Check if any linked account is from Zerodha/Keynote
                 has_excluded_broker = False
@@ -327,15 +379,24 @@ class OutsideAccProcessor:
                         .where(Client.account_id == acc['account_id'])
                     )
                     broker_name = broker_result.scalar_one_or_none()
-                    if broker_name in ['zerodha', 'keynote']:
+                    if broker_name and broker_name.lower() in ['zerodha', 'keynote']:
                         has_excluded_broker = True
+                        logger.info(f"Skipping joint account {joint_account.joint_account_id} as it contains {broker_name} account")
                         break
                 
                 if not has_excluded_broker:
+                    # Normalize broker codes for linked accounts
+                    for acc in linked_accounts:
+                        if acc.get('broker_code'):
+                            acc['broker_code'] = acc['broker_code'].lower().strip()
+                    
+                    logger.info(f"Processing joint account {joint_account.joint_account_id}")
                     await self.process_joint_account(db, holdings_df, joint_account, file_date, cash_df)
+                    joint_processed_count += 1
                 else:
                     logger.info(f"Skipping joint account {joint_account.joint_account_id} as it contains Zerodha/Keynote accounts")
             
+            logger.info(f"Processed {joint_processed_count} out of {len(joint_accounts)} joint accounts")
             logger.info("Outside holdings processing completed successfully")
             
         except Exception as e:
@@ -343,14 +404,11 @@ class OutsideAccProcessor:
             raise
 
 
-async def main() -> None:
-    """Main function to run the outside holdings processing."""
-    logger.info("Starting main outside holdings processing script")
-    async with AsyncSessionLocal() as db:
-        processor = OutsideAccProcessor()
-        await processor.process_outside_holdings(db)
-    logger.info("Main outside holdings processing script completed")
-
-
 if __name__ == "__main__":
+    # Run the full outside holdings processing
+    async def main():
+        async with AsyncSessionLocal() as db:
+            processor = OutsideAccProcessor()
+            await processor.process_outside_holdings(db)
+            
     asyncio.run(main())

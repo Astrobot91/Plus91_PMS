@@ -141,7 +141,7 @@ class IdealPfProcessor:
             logger.warning(f"No stock mappings found for basket {basket_id}")
             return None
 
-        total_multiplier = sum(stock.multiplier for stock in stocks)
+        total_multiplier = len(stocks)
         return [{
             "trading_symbol": stock.trading_symbol,
             "multiplier": stock.multiplier,
@@ -302,40 +302,44 @@ class IdealPfProcessor:
         self,
         owner_id: str,
         owner_type: str,
-        bracket_id: int
+        bracket_id: int,
+        update_brackets: bool = False
     ) -> Optional[List[Dict]]:
-        """Get basket allocations for an account, either custom or standard."""
+        """Get basket allocations for an account, either custom or standard.
+        
+        This function prioritizes using existing allocations if they exist, regardless of bracket_id.
+        Only creates new allocations if none exist and update_brackets is True.
+        """
         try:
-            # First check if account has custom allocations
-            custom_query = select(AccountBracketBasketAllocation).where(
+            # First check if account has ANY allocations (regardless of bracket_id)
+            any_alloc_query = select(AccountBracketBasketAllocation).where(
                 AccountBracketBasketAllocation.owner_id == owner_id,
-                AccountBracketBasketAllocation.owner_type == owner_type,
-                AccountBracketBasketAllocation.bracket_id == bracket_id,
-                AccountBracketBasketAllocation.is_custom == True
+                AccountBracketBasketAllocation.owner_type == owner_type
             )
-            custom_result = await self.db.execute(custom_query)
-            custom_allocations = custom_result.scalars().all()
+            any_alloc_result = await self.db.execute(any_alloc_query)
+            any_allocations = any_alloc_result.scalars().all()
             
-            # If custom allocations exist, use only those and don't mix with standard ones
-            if custom_allocations:
-                logger.info(f"Found custom allocations for {owner_type} account {owner_id}, using only those")
-                allocations = custom_allocations
-            else:
-                # Check for any allocations (should be only standard ones if any)
-                query = select(AccountBracketBasketAllocation).where(
-                    AccountBracketBasketAllocation.owner_id == owner_id,
-                    AccountBracketBasketAllocation.owner_type == owner_type,
-                    AccountBracketBasketAllocation.bracket_id == bracket_id
-                )
-                result = await self.db.execute(query)
-                allocations = result.scalars().all()
+            if any_allocations:
+                # If the account has ANY allocations, use those
+                logger.info(f"Found existing allocations for {owner_type} account {owner_id}, using those")
+                allocations = any_allocations
                 
-                if not allocations:
-                    # No allocations found at all, insert standard ones
+                # Get the bracket_id from these allocations (might be different from account's bracket_id)
+                actual_bracket_id = allocations[0].bracket_id if allocations else bracket_id
+                if actual_bracket_id != bracket_id:
+                    logger.info(f"Account {owner_id} has allocations with bracket_id {actual_bracket_id}, " 
+                               f"but account table shows bracket_id {bracket_id}")
+            else:
+                # No allocations found at all
+                if update_brackets:
+                    # Only create standard allocations if update_brackets is True
                     logger.info(f"No allocations found for {owner_type} account {owner_id}, adding standard allocations")
                     await self._update_account_allocations(owner_id, owner_type, bracket_id, False)
-                    result = await self.db.execute(query)
+                    result = await self.db.execute(any_alloc_query)
                     allocations = result.scalars().all()
+                else:
+                    logger.info(f"No allocations found for {owner_type} account {owner_id}, but not creating as update_brackets=False")
+                    return []  # Return empty list instead of creating new allocations
 
             # Get basket names
             basket_names = {}
@@ -382,8 +386,6 @@ class IdealPfProcessor:
             )
             latest_date_result = await self.db.execute(latest_date_query)
             latest_date = latest_date_result.scalar_one_or_none()
-            if account_id == 'ACC_000352':
-                print("LATEST DATE: ",  latest_date)
 
             if not latest_date:
                 logger.warning(f"No actual portfolio found for {account_type} account {account_id}")
@@ -422,13 +424,10 @@ class IdealPfProcessor:
             
             # Total holdings = cash + filtered holdings value
             total_holdings = cash_value + holdings_value
-            print("CASH VALUE: ", cash_value)
-            print("TOTAL HOLDINGS: ", total_holdings)
             logger.info(
                 f"Calculated total holdings for {account_type} account {account_id}: "
                 f"Cash: {cash_value}, Holdings: {holdings_value}, Total: {total_holdings}"
             )
-            
             return total_holdings
             
         except Exception as e:
@@ -595,7 +594,12 @@ class IdealPfProcessor:
                     logger.info(f"Using existing bracket_id {bracket_id} for {account_type} account {account_id}")
 
             # Get basket allocations for account (either custom or standard)
-            basket_allocations = await self._get_account_allocations(account_id, account_type, bracket_id)
+            basket_allocations = await self._get_account_allocations(
+                account_id, 
+                account_type, 
+                bracket_id,
+                update_brackets  # Pass the update_brackets parameter here
+            )
 
             if not basket_allocations:
                 return
@@ -656,7 +660,7 @@ class IdealPfProcessor:
                     continue
 
                 basket_name = basket_alloc["basket_name"]
-                
+
                 # Process stocks within each basket
                 for stock in stocks:
                     trading_symbol = stock["trading_symbol"]
@@ -672,7 +676,8 @@ class IdealPfProcessor:
                     
                     weight = stock["weight"]
                     stock_investment = weight * basket_amount
-                    
+
+                    # Check if the stock is in the exceptions list                     
                     portfolio_entry = AccountIdealPortfolio(
                         owner_id=account_id,
                         owner_type=account_type,
@@ -712,11 +717,10 @@ class IdealPfProcessor:
                                     if False, use existing bracket_id (default: False)
         """
         for account in accounts:
-            # if account.get("account_id") == "ACC_000352":
+            if account.get("account_id") == "ACC_000350":
                 account_id = account.get("account_id")
                 account_type = account.get("account_type", "single")
                 
-                # Don't require total_holdings since it will be recalculated
                 if not account_id:
                     logger.warning(f"Missing account_id in account data: {account}")
                     continue
@@ -724,7 +728,7 @@ class IdealPfProcessor:
                 await self.process_account_ideal_portfolio(
                     account_id,
                     account_type, 
-                    account.get("total_holdings", 0),  # This is just a placeholder and will be recalculated
+                    account.get("total_holdings", 0),
                     snapshot_date,
                     update_brackets
                 )

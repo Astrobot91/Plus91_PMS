@@ -115,6 +115,7 @@ class CashflowProgressionProcessor:
                 select(AccountCashflow.event_date, AccountCashflow.cashflow)
                 .where(AccountCashflow.owner_id == owner_id)
                 .where(AccountCashflow.owner_type == owner_type)
+                .where(AccountCashflow.tag != 'fees')
             )
             result = await self.db.execute(query)
             cashflows = result.all()

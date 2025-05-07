@@ -6,7 +6,8 @@ import calendar
 import pandas as pd
 from app.scripts.db_processors.db_runner import runner
 from app.scripts.report_generation.report_generator import (
-    generate_report,
+    generate_plus91_report,
+    generate_etico_report,
     load_bse500_data,
     get_portfolio_summary,
     get_returns_table,
@@ -40,7 +41,7 @@ async def main() -> None:
 
         grouped_df = report_df.groupby('account_id')
         for account_id, group in grouped_df:
-            # if account_id in ['ACC_000350']:
+            if account_id in ['ACC_000545']:
                 logger.info(f"Generating report for account ID: {account_id}")
                 account_name = group['account_name'].iloc[0]
                 acc_start_date = group['acc_start_date'].iloc[0]
@@ -54,6 +55,7 @@ async def main() -> None:
                 current_yr_twrr = group['current_yr_twrr'].iloc[0]
                 cagr = group['cagr'].iloc[0]
                 broker_code = group['broker_codes'].iloc[0]
+                distributor_name = group['distributor_name'].iloc[0]
                 formatted_broker_code = format_broker_code(broker_code)
 
                 portfolio_summary = get_portfolio_summary(str(acc_start_date), total_holdings, invested_amt)
@@ -62,23 +64,43 @@ async def main() -> None:
                     str(acc_start_date), str(snapshot_date), bse500_df
                 )
                 returns_table = get_returns_table(
-                    current_yr_twrr, total_twrr, cagr,
-                    bse500_current_yr_twrr, bse500_abs_twrr, bse500_abs_cagr, str(snapshot_date)
+                    current_yr_twrr, total_twrr, cagr, bse500_current_yr_twrr, 
+                    bse500_abs_twrr, bse500_abs_cagr, str(snapshot_date), 
                 )
                  # Generate the report
-                logo_path = "/home/admin/Plus91Backoffice/Plus91_Backend/app/scripts/report_generation/assets/Plus91_logo.jpeg"
+                plus91_logo_path = "/home/admin/Plus91Backoffice/Plus91_Backend/app/scripts/report_generation/assets/Plus91_logo.jpeg"
                 down_design_path = "/home/admin/Plus91Backoffice/Plus91_Backend/app/scripts/report_generation/assets/Down_design.jpeg"
-                pdf_bytes = generate_report(
-                    portfolio_report,
-                    portfolio_summary,
-                    returns_table,
-                    logo_path,
-                    down_design_path,
-                    account_name,
-                    formatted_broker_code,
-                    str(acc_start_date),
-                    str(snapshot_date)
-                )
+                etico_logo_path = "/home/admin/Plus91Backoffice/Plus91_Backend/app/scripts/report_generation/assets/Etico_logo.jpg"
+
+                pdf_bytes = None
+                if distributor_name != "Etico":
+                    pdf_bytes = generate_plus91_report(
+                        portfolio_report,
+                        portfolio_summary,
+                        returns_table,
+                        plus91_logo_path,
+                        down_design_path,
+                        account_name,
+                        formatted_broker_code,
+                        str(acc_start_date),
+                        str(snapshot_date)
+                    )
+                else:
+                    returns_table = get_returns_table(
+                        current_yr_twrr, total_twrr, cagr, bse500_current_yr_twrr, 
+                        bse500_abs_twrr, bse500_abs_cagr, str(snapshot_date), "ETICO"
+                    )
+                    pdf_bytes = generate_etico_report(
+                        portfolio_report,
+                        portfolio_summary,
+                        returns_table,
+                        etico_logo_path,
+                        down_design_path,
+                        account_name,
+                        formatted_broker_code,
+                        str(acc_start_date),
+                        str(snapshot_date)
+                    )
                 snapshot_date = pd.to_datetime(snapshot_date)
                 year = snapshot_date.year
                 month_abbr = calendar.month_abbr[snapshot_date.month].upper()

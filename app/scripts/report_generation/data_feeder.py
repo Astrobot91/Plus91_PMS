@@ -29,6 +29,7 @@ cd = aliased(Client, name='client_details_1')
 ap = aliased(AccountActualPortfolio, name='account_actual_portfolio_1')
 perf = aliased(AccountPerformance, name='account_performance_1')
 jam = aliased(JointAccountMapping, name='joint_account_mapping_1')
+dist = aliased(Distributor, name='distributor_1')
 
 # Subquery for latest snapshot date for single accounts
 latest_ap_single = select(
@@ -63,9 +64,12 @@ single_query = select(
     perf.total_twrr,
     perf.current_yr_twrr,
     perf.cagr,
-    cd.broker_code.label('broker_codes')
+    cd.broker_code.label('broker_codes'),
+    dist.name.label('distributor_name')  # Changed from dist.distributor_name to dist.name
 ).join(
     cd, sa.single_account_id == cd.account_id
+).outerjoin(
+    dist, cd.distributor_id == dist.distributor_id
 ).join(
     latest_ap_single, sa.single_account_id == latest_ap_single.c.owner_id
 ).outerjoin(
@@ -93,13 +97,19 @@ joint_query = select(
     perf.total_twrr,
     perf.current_yr_twrr,
     perf.cagr,
-    func.string_agg(cd.broker_code, ', ').label('broker_codes')
+    func.string_agg(cd.broker_code, ', ').label('broker_codes'),
+    func.coalesce(
+        func.min(func.nullif(dist.name, '')), 
+        func.min(dist.name)
+    ).label('distributor_name')
 ).join(
     jam, ja.joint_account_id == jam.joint_account_id
 ).join(
     sa, jam.account_id == sa.single_account_id
 ).join(
     cd, sa.single_account_id == cd.account_id
+).outerjoin(
+    dist, cd.distributor_id == dist.distributor_id
 ).join(
     latest_ap_joint, ja.joint_account_id == latest_ap_joint.c.owner_id
 ).outerjoin(

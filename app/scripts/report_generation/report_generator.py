@@ -5,9 +5,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from functools import reduce
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta, date 
+from datetime import datetime, timedelta, date
 from app.scripts.data_fetchers.broker_data import BrokerData
 from app.logger import logger
+
 
 def load_bse500_data():
     try:
@@ -185,7 +186,8 @@ def get_returns_table(
         bse500_current_year_twrr: float = 0,
         bse500_absolute_twrr: float = 0,
         bse500_absolute_cagr: float = 0,
-        snapshot_date: str = ""
+        snapshot_date: str = "",
+        company_name: str = "PLUS91"
     ) -> pd.DataFrame: 
 
     snapshot_dt = datetime.strptime(snapshot_date, "%Y-%m-%d").date()
@@ -199,7 +201,7 @@ def get_returns_table(
     fiscal_label = f"FY {str(fiscal_start)[-2:]}-{str(fiscal_end)[-2:]}"
 
     returns_data = {
-    'RETURNS': ['PLUS91', 'BSE500'],
+    'RETURNS': [f'{company_name}', 'BSE500'],
     fiscal_label: [f'{round(plus91_current_year_twrr, 1)}%', f'{round(bse500_current_year_twrr, 1)}%'],
     'ABSOLUTE RETURNS': [f'{round(plus91_absolute_twrr, 1)}%', f'{round(bse500_absolute_twrr, 1)}%'],
     'SINCE INCEPTION CAGR': [f'{round(plus91_absolute_cagr, 1)}%', f'{round(bse500_absolute_cagr, 1)}%']
@@ -255,17 +257,16 @@ def get_portfolio_report(
     actual_portfolio.replace(0, '', inplace=True)
     return actual_portfolio
 
-def generate_report(
-        portfolio_report
-        : pd.DataFrame,
+def generate_plus91_report(
+        portfolio_report: pd.DataFrame,
         portfolio_summary: pd.DataFrame,
         returns_df: pd.DataFrame, 
-        logo_path: str,
-        down_design_path: str,
         account_name: str,
         broker_code: str,
         acc_start_date: str,
-        snapshot_date: str
+        snapshot_date: str,
+        logo_path: str,
+        down_design_path: str,
     ) -> bytes:
 
     page_width = 18
@@ -587,9 +588,359 @@ def generate_report(
     )
 
     # ADD RETURNS STATEMENT:
+    # fig.add_annotation(
+    #     x=0.02, y=0.635,
+    #     text=f"Portfolio returns are after advisory fees and other expenses.",
+    #     showarrow=False,
+    #     align='left',
+    #     font=dict(family='Arial', size=12, color='black'),
+    #     yanchor='top',
+    #     xanchor='left',
+    #     bgcolor=None,
+    #     opacity=1
+    # )
+
+
+    # ADD MANAGER DETAILS:
     fig.add_annotation(
-        x=0.02, y=0.635,
-        text=f"Portfolio returns are after advisory fees and other expenses.",
+        x=0.015, y=0.02,
+        text=f"plus91.co    parth@plus91.co     +91-9930795667",
+        showarrow=False,
+        align='left',
+        font=dict(family='Arial', size=18, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+    
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(visible=False)
+
+    pdf_bytes = fig.to_image(format="pdf", engine="kaleido", scale=3)
+    return pdf_bytes
+
+def generate_etico_report(
+        portfolio_report: pd.DataFrame,
+        portfolio_summary: pd.DataFrame,
+        returns_df: pd.DataFrame, 
+        logo_path: str,
+        down_design_path: str,
+        account_name: str,
+        broker_code: str,
+        acc_start_date: str,
+        snapshot_date: str,
+    ) -> bytes:
+
+    page_width = 18
+    base_page_height = 20
+    page_dpi = 50
+    page_margin = 0
+
+    num_table_rows = 28
+    table_row_height = 20
+    table_height_in_inches = 11.2
+    total_page_height = 31.2
+
+    downDesign_base64 = read_image_as_base64(down_design_path)
+    logo_base64 = read_image_as_base64(logo_path)
+    account_name = account_name.strip()
+    broker_code = broker_code.strip()
+
+    # CREATE SUBPLOT
+    fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.5, 0.6],
+        vertical_spacing=0.2,
+        specs=[[{"type": "xy"}], [{"type": "domain"}]]
+    )
+
+    fig.update_layout(
+        width=page_width * page_dpi,
+        height=total_page_height * page_dpi,
+        margin=dict(l=page_margin, r=page_margin, t=page_margin, b=page_margin),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False)
+    )
+
+    # Add down design
+    fig.add_layout_image(
+        dict(
+            source=f"data:image/png;base64,{downDesign_base64}",
+            xref='paper', yref='paper',
+            x=1, y=0,
+            sizex=0.25, sizey=0.25,
+            xanchor='right', yanchor='bottom',
+            layer='below'
+        )
+    )
+
+    # ADD HORIZONTAL BLACK TOP LINE
+    fig.add_shape(
+        type='line',
+        x0=0.015, y0=0.937,
+        x1=0.985, y1=0.937,
+        xref='paper', yref='paper',
+        line=dict(color='black', width=3)
+    )
+
+    # ADD VERTICAL RED TOP LINE
+    fig.add_shape(
+        type='line',
+        x0=0.65, y0=0.993,
+        x1=0.65, y1=0.95,
+        xref='paper', yref='paper',
+        line=dict(color='red', width=3)
+    )
+
+    # ADD ETICO LOGO
+    fig.add_layout_image(
+        dict(
+            source=f"data:image/png;base64,{logo_base64}",
+            xref='paper', yref='paper',
+            x=0.64, y=0.944,
+            sizex=0.095, sizey=0.095,
+            xanchor='right', yanchor='bottom',
+            layer='below'
+        )
+    )
+
+    # ADD RED BOX
+    fig.add_shape(
+        type='rect',
+        x0=0.015, y0=0.87,
+        x1=0.49, y1=0.925,
+        xref='paper', yref='paper',
+        line=dict(color='black', width=2),
+        fillcolor='rgba(255,0,0,0.5)',
+        opacity=1
+    )
+
+    # ADD TWRR TABLE
+    #############################################################################################################
+    twrr_values = [returns_df[col].tolist() for col in returns_df.columns]
+
+    snapshot_dt = datetime.strptime(snapshot_date, "%Y-%m-%d").date()
+    if snapshot_dt.month >= 4:
+        fiscal_start = snapshot_dt.year
+        fiscal_end = snapshot_dt.year + 1
+    else:
+        fiscal_start = snapshot_dt.year - 1
+        fiscal_end = snapshot_dt.year
+
+    fiscal_label = f"FY {str(fiscal_start)[-2:]}-{str(fiscal_end)[-2:]}"
+
+    fig.add_trace(
+        go.Table(
+            columnwidth=[0.25, 0.25, 0.25, 0.25],
+            header=dict(
+                values=["<b>RETURNS</b>", f"<b>{fiscal_label} %</b>", "<b>ABSOLUTE RETURNS %</b>", "<b>SINCE INCEPTION CAGR %</b>"],
+                fill_color='rgba(211, 211, 211, 0.2)',
+                align='center',
+                line_color='black',
+                height=25,
+                font=dict(size=11, color='black', family='Arial')
+            ),
+            cells=dict(
+                values=twrr_values,
+                fill_color='rgba(0,0,0,0)',
+                align=['center', 'center', 'center', 'center'],
+                line_color='black',
+                height=25,
+                font=dict(
+                    size=11,
+                    color='black',
+                    family='Arial'
+                )
+            ),
+            domain=dict(x=[0.02, 0.49], y=[0.1, 0.716])  # Adjust domain to position the table correctly
+        )
+    )
+
+
+
+    # ADD PORTFOLIO SUMMARY
+    #############################################################################################################
+    portfolio_summary_values = [portfolio_summary.index.tolist(), portfolio_summary.iloc[:, 0].tolist()]
+
+    fig.add_trace(
+        go.Table(
+            columnwidth=[0.7, 0.3],
+            header=dict(
+                values=["<b>PORTFOLIO SUMMARY", ""],
+                fill_color='rgba(211, 211, 211, 0.2)',
+                align='left',
+                line_color='black',
+                height=25,
+                font=dict(size=11, color='black', family='Arial')
+            ),
+            cells=dict(
+                values=portfolio_summary_values,
+                fill_color='rgba(0,0,0,0)',
+                align=['left', 'right'],
+                line_color='black',
+                height=25,
+                font=dict(
+                    size=11,
+                    color='black',
+                    family='Arial'
+                )
+            ),
+            domain=dict(x=[0.02, 0.49], y=[0.25, 0.815])
+        )
+    )
+
+
+    # ADD PORTFOLIO TABLE
+    #############################################################################################################
+
+    light_grey = 'rgba(211, 211, 211, 0.35)'
+
+    values = [portfolio_report[col].tolist() for col in portfolio_report.columns]
+    values[0][-1] = f"<b>{values[0][-1]}</b>"
+    values[2][-1] = f"<b>{values[2][-1]}</b>"
+
+    fig.add_trace(
+        go.Table(
+            columnwidth=[0.4, 0.2, 0.27, 0.2],
+            header=dict(
+                values=["<b>SECURITY</b>", "<b>QUANTITY</b>", "<b>MARKET VALUE</b>", "<b>ASSETS</b>"],
+                fill_color='rgba(211, 211, 211, 0.2)',
+                align='center',
+                line_color='black',
+                height=25,
+                font=dict(size=11, color='black', family='Arial')
+            ),
+            cells=dict(
+                values=[portfolio_report['SECURITY'], portfolio_report['QUANTITY'], portfolio_report['MARKET VALUE'], portfolio_report['ASSETS'].round(1)],
+                fill_color='rgba(0,0,0,0)',
+                align=['left', 'right', 'right', 'right'],
+                line_color='black',
+                height=20,
+                font=dict(
+                    size=11,
+                    color='black',
+                    family='Arial',
+                    )
+            ),
+            domain=dict(x=[0.51, 0.985], y=[0, min(1.1, 0.925)])
+        )
+    )
+
+    # ADD HEADING RECTANGLE
+    fig.add_shape(
+        type="rect",
+        x0=0.015, y0=0.99, x1=0.5, y1=0.95,
+        line=dict(color="black", width=3),
+        fillcolor="rgba(0, 0, 0, 0)",
+        layer='below'
+    )
+
+    # ADD PLUS91 ASSET MANAGEMENT HEADING TEXT
+    fig.add_annotation(
+        x=0.02, y=0.99,
+        text=f'ETICO CONSULTANCY',
+        showarrow=False,
+        font=dict(family='Arial', size=25, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # ADD AS OF: HEADING
+    # today_date = date.today().strftime('%d-%m-%Y')
+    fig.add_annotation(
+        x=0.02, y=0.968,
+        text=f'AS OF: {snapshot_date}',
+        showarrow=False,
+        font=dict(family='Arial', size=19, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # ADD EXPERTISE YOU NEED
+    fig.add_annotation(
+        x=0.7, y=0.985,
+        text=f'EXPERTISE YOU NEED',
+        showarrow=False,
+        font=dict(family='Arial', size=15, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # ADD SERVICE YOU DESERVE
+    fig.add_annotation(
+        x=0.68, y=0.972,
+        text=f'SERVICE YOU DESERVE',
+        showarrow=False,
+        font=dict(family='Arial', size=18, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # ADD REDBOX DETAILS
+    # Add Strategy Name
+    fig.add_annotation(
+        x=0.02, y=0.922,
+        text=f'STRATEGY: ETICO CUSTOMIZED PORTFOLIO',
+        showarrow=False,
+        font=dict(family='Arial', size=14, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    client_name = f"{account_name.upper()} {broker_code}"
+    # Add Account
+    fig.add_annotation(
+        x=0.02, y=0.906,
+        text=f'ACCOUNT: {client_name}',
+        showarrow=False,
+        font=dict(family='Arial', size=14, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # Add Inception Date
+    fig.add_annotation(
+        x=0.02, y=0.889,
+        text=f'INCEPTION DATE: {acc_start_date}',
+        showarrow=False,
+        font=dict(family='Arial', size=14, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # ADD INVESTMENT OBJECTIVE TITLE:
+    fig.add_annotation(
+        x=0.02, y=0.86,
+        text=f"<span style='text-decoration:underline;'>INVESTMENT OBJECTIVE</span>:",
+        showarrow=False,
+        font=dict(family='Arial', size=14, color='black'),
+        yanchor='top',
+        xanchor='left',
+        bgcolor=None,
+        opacity=1
+    )
+
+    # ADD INVESTMENT OBJECTIVE CONTENT:
+    fig.add_annotation(
+        x=0.02, y=0.845,
+        text=f"To achieve greater than average market return with customized<br>baskets based on the client's risk profile and objectives.",
         showarrow=False,
         align='left',
         font=dict(family='Arial', size=12, color='black'),
@@ -599,11 +950,24 @@ def generate_report(
         opacity=1
     )
 
+    # ADD RETURNS STATEMENT:
+    # fig.add_annotation(
+    #     x=0.02, y=0.635,
+    #     text=f"Portfolio returns are after advisory fees and other expenses.",
+    #     showarrow=False,
+    #     align='left',
+    #     font=dict(family='Arial', size=12, color='black'),
+    #     yanchor='top',
+    #     xanchor='left',
+    #     bgcolor=None,
+    #     opacity=1
+    # )
+
 
     # ADD MANAGER DETAILS:
     fig.add_annotation(
         x=0.015, y=0.02,
-        text=f"plus91.co    parth@plus91.co     +91-9930795667",
+        text=f"etico.cons@gmail.com    022-28844298",
         showarrow=False,
         align='left',
         font=dict(family='Arial', size=18, color='black'),

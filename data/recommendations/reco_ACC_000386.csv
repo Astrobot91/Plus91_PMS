@@ -1,9 +1,10 @@
 broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
-YM007,keynote,GPTINFRA,3.0,SELL,
-YM007,keynote,SHRIRAMFIN,33.0,BUY,
-YM007,keynote,SPANDANA,232.0,SELL,
-YM007,keynote,PNB,60.0,BUY,
-YM007,keynote,RECLTD,32.0,BUY,
+YM007,keynote,PFC,38.0,BUY,
+YM007,keynote,PNB,86.0,BUY,
+YM007,keynote,SPANDANA,211.0,SELL,
+YM007,keynote,RECLTD,36.0,BUY,
+YM007,keynote,GPTINFRA,73.0,BUY,
+YM007,keynote,BHARTIARTL,2.0,SELL,
+YM007,keynote,SHRIRAMFIN,27.0,BUY,
+YM007,keynote,BANKBARODA,520.0,BUY,Total ENTRY
 YM007,keynote,LIQUIDBEES,59.0,SELL,Total EXIT
-YM007,keynote,BANKBARODA,516.0,BUY,Total ENTRY
-YM007,keynote,PFC,36.0,BUY,

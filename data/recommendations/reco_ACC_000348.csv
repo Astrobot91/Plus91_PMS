@@ -1,9 +1,9 @@
 broker_code,broker_name,trading_symbol,quantity,signal,total_entry_exit
-KV001,finflo,GPTINFRA,171.0,BUY,Total ENTRY
-KV001,finflo,SHRIRAMFIN,12.0,BUY,Total ENTRY
-KV001,finflo,SPANDANA,61.0,BUY,Total ENTRY
-KV001,finflo,PNB,76.0,BUY,Total ENTRY
+KV001,finflo,PFC,191.0,SELL,
+KV001,finflo,PNB,78.0,BUY,Total ENTRY
+KV001,finflo,SPANDANA,62.0,BUY,Total ENTRY
 KV001,finflo,RECLTD,18.0,BUY,Total ENTRY
-KV001,finflo,BANKBARODA,30.0,BUY,Total ENTRY
-KV001,finflo,PFC,192.0,SELL,
+KV001,finflo,GPTINFRA,176.0,BUY,Total ENTRY
 KV001,finflo,BHARTIARTL,4.0,BUY,Total ENTRY
+KV001,finflo,SHRIRAMFIN,12.0,BUY,Total ENTRY
+KV001,finflo,BANKBARODA,31.0,BUY,Total ENTRY

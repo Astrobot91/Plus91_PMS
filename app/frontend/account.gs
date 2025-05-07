@@ -47,7 +47,7 @@ function viewAccounts() {
     }
 
     // 2) Add a read-only notice at the top (merge columns as needed)
-    const totalColumns = 13; // Because we have 13 columns below
+    const totalColumns = 14; // Now 14 columns with the addition of Last Updated
     sheet
       .getRange(1, 1, 1, totalColumns)
       .merge()
@@ -71,7 +71,8 @@ function viewAccounts() {
       "Total TWRR",
       "Current Year TWRR",
       "CAGR",
-      "Created At"
+      "Last Updated",
+      "Created At",
     ];
 
     sheet
@@ -156,7 +157,8 @@ function viewAccounts() {
         acc.total_twrr != null ? acc.total_twrr : "",
         acc.current_yr_twrr != null ? acc.current_yr_twrr : "",
         acc.cagr != null ? acc.cagr : "",
-        acc.created_at || ""
+        acc.latest_snapshot_date || "",  // New column with the snapshot date
+        acc.created_at || "",
       ]);
 
       sheet
