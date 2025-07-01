@@ -214,10 +214,10 @@ function savePortfolioChanges() {
   // sheet_1.getRange("A50").setValue(jsonString);
   /***************************************************************************************/
 
-  if (!validateMultiplierConstraints(dataPayload)) {
-    SpreadsheetApp.getUi().alert("Sum of multipliers != number of stocks in a basket. Fix and retry.");
-    return;
-  }
+  // if (!validateMultiplierConstraints(dataPayload)) {
+  //   SpreadsheetApp.getUi().alert("Sum of multipliers != number of stocks in a basket. Fix and retry.");
+  //   return;
+  // }
   let portfolioId = 1; 
   let url = "http://15.207.59.232:8000/portfolios/"+portfolioId+"/structure/save";
   let resp = UrlFetchApp.fetch(url, {
