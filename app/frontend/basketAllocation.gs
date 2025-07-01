@@ -1,6 +1,6 @@
 /**
- * Creates a new sheet for managing basket allocations for accounts.
- * The sheet allows viewing and editing basket allocations with selectable rows.
+ * Creates a new sheet for managing Basket % Allocations for accounts.
+ * The sheet allows viewing and editing Basket % Allocations with selectable rows.
  */
 function viewBasketAllocations() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -10,39 +10,39 @@ function viewBasketAllocations() {
     // Log the beginning of the sheet setup
     logAction(
       "Create Sheet",
-      "Basket Allocations",
+      "Basket % Allocations",
       "",
       "",
       "",
       "Started",
-      "Creating or clearing the 'Basket Allocations' sheet",
+      "Creating or clearing the 'Basket % Allocations' sheet",
       "INFO"
     );
 
-    // Create or clear the 'Basket Allocations' sheet
-    let sheet = ss.getSheetByName("Basket Allocations");
+    // Create or clear the 'Basket % Allocations' sheet
+    let sheet = ss.getSheetByName("Basket % Allocations");
     if (!sheet) {
-      sheet = ss.insertSheet("Basket Allocations");
+      sheet = ss.insertSheet("Basket % Allocations");
       logAction(
         "Create Sheet",
-        "Basket Allocations",
+        "Basket % Allocations",
         "",
         "",
         "",
         "Success",
-        "Created new 'Basket Allocations' sheet",
+        "Created new 'Basket % Allocations' sheet",
         "INFO"
       );
     } else {
       sheet.clear();
       logAction(
         "Clear Sheet",
-        "Basket Allocations",
+        "Basket % Allocations",
         "",
         "",
         "",
         "Success",
-        "Cleared existing 'Basket Allocations' sheet",
+        "Cleared existing 'Basket % Allocations' sheet",
         "INFO"
       );
     }
@@ -57,7 +57,7 @@ function viewBasketAllocations() {
       if (statusCode !== 200) {
         logAction(
           "Fetch Data",
-          "Basket Allocations",
+          "Basket % Allocations",
           "",
           "",
           "",
@@ -71,7 +71,7 @@ function viewBasketAllocations() {
       responseData = JSON.parse(response.getContentText());
       logAction(
         "Fetch Data",
-        "Basket Allocations",
+        "Basket % Allocations",
         "",
         "",
         "",
@@ -138,14 +138,14 @@ function viewBasketAllocations() {
     headerRow1.setBackground("#000000");
     headerRow1.setFontColor("#FFFFFF");
     headerRow1.setFontWeight("bold");
-    headerRow1.setFontSize(10);
+    headerRow1.setFontSize(11);
     headerRow1.setHorizontalAlignment("left");
     headerRow1.setVerticalAlignment("middle");
     headerRow1.setWrap(true);
     
     // Format the second row (column headers)
     const headerRow2 = sheet.getRange(2, 1, 1, maxColumns);
-    headerRow2.setBackground("#46bdc6");
+    headerRow2.setBackground("#91B9F9");
     headerRow2.setFontWeight("bold");
     headerRow2.setHorizontalAlignment("center");
     
@@ -170,16 +170,18 @@ function viewBasketAllocations() {
     sheet.setColumnWidth(2, 120); // Account ID
     sheet.setColumnWidth(3, 180); // Account Name
     sheet.setColumnWidth(4, 100); // Account Type
-    sheet.setColumnWidth(5, 180); // Portfolio Name
-    sheet.setColumnWidth(6, 120); // Bracket Name
-    sheet.setColumnWidth(7, 120); // Total % Allocation
+    sheet.setColumnWidth(5, 120); // Broker Name
+    sheet.setColumnWidth(6, 100); // Broker Code
+    sheet.setColumnWidth(7, 180); // Portfolio Name
+    sheet.setColumnWidth(8, 120); // Bracket Name
+    sheet.setColumnWidth(9, 120); // Total % Allocation
     
     // Set width for basket columns
     for (let i = 0; i < baskets.length; i++) {
-      sheet.setColumnWidth(8 + i, 120);
+      sheet.setColumnWidth(10 + i, 120);
     }
     
-    sheet.setColumnWidth(8 + baskets.length, 150); // Updated At
+    sheet.setColumnWidth(10 + baskets.length, 150); // Updated At
     
     // Create checkboxes in the 'Select' column
     // After removing the old instructions row, data rows start at row 3
@@ -197,11 +199,11 @@ function viewBasketAllocations() {
     const firstRowData = sheetData[0]; // First row contains column headers with basket names
     const basketNames = [];
     
-    // Skip the first placeholder ("Basket % Allocation") and the last ("Updated At")
+    // Skip the first placeholder ("Basket % Allocations") and the last ("Updated At")
     // All other non-empty values in between the standard columns are basket names
     const startIndex = 9; // Index after standard columns (Select, ID, Name, Type, Portfolio, Bracket, Total, Broker Name, Broker Code)
     const endIndex = firstRowData.length - 1; // Index before "Updated At"
-    
+
     for (let i = startIndex; i < endIndex; i++) {
       const columnName = firstRowData[i];
       if (columnName && columnName.trim() !== "") {
@@ -212,50 +214,50 @@ function viewBasketAllocations() {
       }
     }
     
+    console.log('Found basketNames: ', basketNames);
     console.log(`Found ${basketNames.length} baskets directly from header row`);
     basketNames.forEach(b => console.log(`- ${b.name} (column ${b.index})`));
     
-    // Format all basket columns as plain numbers instead of percentages
+    // Format all basket columns as percentages
     // Note: dataStartRow is already declared above, don't redeclare it here
     basketNames.forEach(basket => {
-      const colIndex = basket.index;
+
+      const colIndex = basket.index + 1;
       const allocRange = sheet.getRange(dataStartRow, colIndex, dataRows);
       
-      // Format as plain number with 2 decimal places
-      allocRange.setNumberFormat("0.00");
+      let allocValues1 = allocRange.getValues();
+
+      // Format as percentage
+      allocRange.setNumberFormat("0.00%");
       
-      // Keep values as numbers without converting to percentages
+      // Convert decimal values to percentages
       const allocValues = allocRange.getValues();
       for (let r = 0; r < allocValues.length; r++) {
         if (typeof allocValues[r][0] === 'number' || !isNaN(parseFloat(allocValues[r][0]))) {
-          // Just ensure it's a number but don't divide by 100
+          // Handle both number types and string numbers
           let numValue = typeof allocValues[r][0] === 'number' ? 
               allocValues[r][0] : parseFloat(allocValues[r][0]);
-          
-          allocValues[r][0] = numValue;
+              
+          allocValues[r][0] = numValue / 100;
         }
       }
       allocRange.setValues(allocValues);
-      
-      // Apply format to each cell to ensure consistency
+
+      // Double-check formatting by applying it directly to each cell
       for (let r = 0; r < dataRows; r++) {
-        sheet.getRange(dataStartRow + r, colIndex).setNumberFormat("0.00");
+        sheet.getRange(dataStartRow + r, colIndex).setNumberFormat("0.00%");
       }
     });
     
-    // Format the 'Total % Allocation' column as plain number
-    const totalAllocRange = sheet.getRange(dataStartRow, 7, dataRows);
-    totalAllocRange.setNumberFormat("0.00");
+    // Format the 'Total % Allocation' column as percentage
+    const totalAllocRange = sheet.getRange(dataStartRow, 9, dataRows);
+    totalAllocRange.setNumberFormat("0.00%");
     
-    // Keep total values as numbers without converting to percentages
+    // Convert decimal values to percentages (multiply by 100)
     const totalValues = totalAllocRange.getValues();
     for (let r = 0; r < totalValues.length; r++) {
       if (typeof totalValues[r][0] === 'number') {
-        // Keep as is, don't divide by 100
-        totalValues[r][0] = totalValues[r][0];
-      } else if (typeof totalValues[r][0] === 'string' && !isNaN(parseFloat(totalValues[r][0]))) {
-        // Convert string to number
-        totalValues[r][0] = parseFloat(totalValues[r][0]);
+        totalValues[r][0] = totalValues[r][0] / 100;
       }
     }
     totalAllocRange.setValues(totalValues);
@@ -264,7 +266,7 @@ function viewBasketAllocations() {
     for (let i = 0; i < dataRows; i++) {
       const rowIndex = dataStartRow + i;
       const totalCell = sheet.getRange(rowIndex, 7);
-      const totalValue = totalCell.getValue(); // Use the value directly without multiplying by 100
+      const totalValue = totalCell.getValue() * 100; // Convert from percentage format
       
       if (Math.abs(totalValue - 100) < 0.01) {
         totalCell.setBackground("#C6EFCE"); // Green for 100%
@@ -287,47 +289,47 @@ function viewBasketAllocations() {
     // Log completion
     logAction(
       "Create Sheet",
-      "Basket Allocations",
+      "Basket % Allocations",
       "",
       "",
       "",
       "Completed",
-      "Basket Allocations sheet successfully populated",
+      "Basket % Allocations sheet successfully populated",
       "INFO"
     );
     
     // Show success message
-    ui.alert(
-      "Basket Allocations Sheet Ready",
-      "Check the boxes in the 'Select' column for accounts you want to update, modify allocation percentages, then click 'Save Allocation Changes'.",
-      ui.ButtonSet.OK
-    );
+    // ui.alert(
+    //   "Basket % Allocations Sheet Ready",
+    //   "Check the boxes in the 'Select' column for accounts you want to update, modify allocation percentages, then click 'Save Allocation Changes'.",
+    //   ui.ButtonSet.OK
+    // );
   } catch (error) {
     // Log any errors
     logError("viewBasketAllocations", error);
-    ui.alert("Error creating Basket Allocations sheet: " + error.message);
+    ui.alert("Error creating Basket % Allocations sheet: " + error.message);
   }
 }
 
 /**
- * Saves changes made to the Basket Allocations sheet.
+ * Saves changes made to the Basket % Allocations sheet.
  * Only rows with the 'Select' checkbox checked will be processed.
  */
 function saveBasketAllocationChanges() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
-  const sheet = ss.getSheetByName("Basket Allocations");
+  const sheet = ss.getSheetByName("Basket % Allocations");
   
   if (!sheet) {
-    ui.alert("Basket Allocations sheet not found.");
+    ui.alert("Basket % Allocations sheet not found.");
     logAction(
       "Save Changes",
-      "Basket Allocations",
+      "Basket % Allocations",
       "",
       "",
       "",
       "Failed",
-      "Basket Allocations sheet not found",
+      "Basket % Allocations sheet not found",
       "ERROR"
     );
     return;
@@ -380,7 +382,7 @@ function saveBasketAllocationChanges() {
         });
       }
     }
-    
+
     console.log(`Found ${basketCols.length} basket columns`);
     basketCols.forEach(b => console.log(`- ${b.name} (column ${b.index})`));
     
@@ -426,7 +428,7 @@ function saveBasketAllocationChanges() {
     // Log that we're sending updates
     logAction(
       "Save Changes",
-      "Basket Allocations",
+      "Basket % Allocations",
       "",
       "",
       "",
@@ -438,7 +440,7 @@ function saveBasketAllocationChanges() {
     // Send the data to the backend in the new format
     const endpoint = "http://15.207.59.232:8000/account-allocations/sheet-update";
     const payload = {
-      sheet_data: selectedRows
+      data: selectedRows
     };
     
     // For debugging: log what we're sending
@@ -451,7 +453,7 @@ function saveBasketAllocationChanges() {
       payload: JSON.stringify(payload),
       muteHttpExceptions: true
     };
-    console.log(JSON.stringify(payload))
+    
     const response = UrlFetchApp.fetch(endpoint, options);
     const statusCode = response.getResponseCode();
     
@@ -459,7 +461,7 @@ function saveBasketAllocationChanges() {
       const errorText = response.getContentText();
       logAction(
         "Save Changes",
-        "Basket Allocations",
+        "Basket % Allocations",
         "",
         "",
         "",
@@ -477,7 +479,7 @@ function saveBasketAllocationChanges() {
     // Log success
     logAction(
       "Save Changes",
-      "Basket Allocations",
+      "Basket % Allocations",
       "",
       "",
       "",
@@ -496,6 +498,89 @@ function saveBasketAllocationChanges() {
     // Log any errors
     logError("saveBasketAllocationChanges", error);
     ui.alert("Error saving allocation changes: " + error.message);
+  }
+}
+
+/**
+ * Handles editing of allocation percentages in the Basket Allocations sheet.
+ * Triggered automatically when a cell is edited.
+ */
+function onEdit(e) {
+  // Check if the edit was in the Basket Allocations sheet
+  const sheet = e.source.getActiveSheet();
+  if (sheet.getName() !== "Basket % Allocations") return;
+  
+  // Get the edited cell
+  const editedCell = e.range;
+  const row = editedCell.getRow();
+  const col = editedCell.getColumn();
+  
+  // Only process edits to data rows (after headers)
+  if (row <= 2) return;
+  
+  try {
+    // Get the first row which contains column headers including basket names
+    const firstRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    // Get the header row with actual column labels
+    const headerRow = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    // Find total % allocation column
+    const totalAllocColIndex = headerRow.indexOf("Total % Allocation") + 1; // +1 because sheet columns are 1-based
+    if (totalAllocColIndex === 0) return; // Not found
+    
+    // Find basket columns by looking at the first row
+    // Basket columns are between standard columns and Updated At
+    const startIndex = 9; // Index after standard columns (Select, ID, Name, Type, Portfolio, Bracket, Total, Broker Name, Broker Code)
+    const endIndex = headerRow.indexOf("Updated At");
+    
+    if (endIndex === -1) return; // Updated At column not found
+    
+    // Create array of basket column indices (1-based for sheet columns)
+    const basketCols = [];
+    for (let i = startIndex; i < endIndex; i++) {
+      if (headerRow[i] && headerRow[i].trim() !== "") {
+        basketCols.push(i + 1); // +1 because sheet columns are 1-based
+      }
+    }
+    
+    // Only process if column is a basket column
+    if (basketCols.length === 0 || !basketCols.includes(col)) return;
+    
+    // Calculate total allocation for the row
+    let total = 0;
+    
+    basketCols.forEach(c => {
+      const value = sheet.getRange(row, c).getValue();
+      if (typeof value === 'number') {
+        total += value * 100; // Convert from percentage format
+      } else if (typeof value === 'string') {
+        // Handle string values (user might enter "13%" or "13")
+        let strValue = value.trim();
+        if (strValue.endsWith('%')) {
+          strValue = strValue.substring(0, strValue.length - 1);
+        }
+        const numValue = parseFloat(strValue);
+        if (!isNaN(numValue)) {
+          total += numValue;
+        }
+      }
+    });
+    
+    // Update the total cell
+    const totalCell = sheet.getRange(row, totalAllocColIndex);
+    totalCell.setValue(total / 100); // Convert back to percentage format
+    
+    // Format the total cell based on the value
+    if (Math.abs(total - 100) < 0.01) {
+      totalCell.setBackground("#C6EFCE"); // Green for 100%
+    } else if (total > 100) {
+      totalCell.setBackground("#FFC7CE"); // Red for > 100%
+    } else if (total < 100) {
+      totalCell.setBackground("#FFEB9C"); // Yellow for < 100%
+    }
+  } catch (error) {
+    console.error("Error in onEdit: " + error.message);
   }
 }
 
