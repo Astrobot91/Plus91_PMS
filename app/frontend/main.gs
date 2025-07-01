@@ -4,6 +4,7 @@ function onOpen() {
   ui.createMenu("Account Operations")
     .addSubMenu(
       ui.createMenu("Manage Clients & Accounts")
+        .addItem("View Consolidated Sheet", "createConsolidatedSheet")
         .addItem("View Clients", "viewClients")
         .addItem("Add Clients", "addClients")
         .addItem("Update Clients", "updateClients")
@@ -24,6 +25,11 @@ function onOpen() {
         .addItem("Input Cashflows", "setupCashflowsSheet")
         .addItem("Stock Exceptions", "setupExceptionsSheet")
     )
+    .addSubMenu(
+      ui.createMenu("Manage Basket Allocations")
+        .addItem("View Basket Allocations", "viewBasketAllocations")
+        .addItem("Save Allocation Changes", "saveBasketAllocationChanges")
+    )
     .addItem("Manage Brokers & Distributors", "showManagementSidebar")
     .addToUi();
 
@@ -39,10 +45,7 @@ function onOpen() {
   
   // Clean up logs on open if they're too large
   cleanupLogs();
-
-  viewClients();
-  viewAccounts();
-
+  createConsolidatedSheet();
 }
 
 function saveClientChanges() {
