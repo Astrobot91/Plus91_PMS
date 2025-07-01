@@ -1,4 +1,3 @@
-
 function viewAccounts() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const ui = SpreadsheetApp.getUi();
@@ -206,47 +205,47 @@ function viewAccounts() {
     }
 
     // 7) Make all data rows read-only by protecting them
-    try {
-      const protectionRange = sheet.getRange(
-        startRow,
-        1,
-        sheet.getMaxRows() - 2,
-        headers.length
-      );
-      const protection = protectionRange.protect();
-      protection.setDescription("Protected range for read-only sheet");
+    // try {
+    //   const protectionRange = sheet.getRange(
+    //     startRow,
+    //     1,
+    //     sheet.getMaxRows() - 2,
+    //     headers.length
+    //   );
+    //   const protection = protectionRange.protect();
+    //   protection.setDescription("Protected range for read-only sheet");
 
-      if (protection.canDomainEdit()) {
-        protection.setDomainEdit(false);
-      }
+    //   if (protection.canDomainEdit()) {
+    //     protection.setDomainEdit(false);
+    //   }
 
-      // Remove existing editors to ensure it's fully read-only
-      const editors = protection.getEditors();
-      if (editors && editors.length > 0) {
-        protection.removeEditors(editors);
-      }
+    //   // Remove existing editors to ensure it's fully read-only
+    //   const editors = protection.getEditors();
+    //   if (editors && editors.length > 0) {
+    //     protection.removeEditors(editors);
+    //   }
 
-      // Setting protections for the entire sheet generally might be needed:
-      // sheet.protect().setWarningOnly(true);
-    } catch (protError) {
-      logAction(
-        "Set Protection",
-        sheetName,
-        "",
-        "",
-        "",
-        "Failed",
-        "Unable to protect sheet range. " + protError.message,
-        "ERROR"
-      );
-    }
+    //   // Setting protections for the entire sheet generally might be needed:
+    //   // sheet.protect().setWarningOnly(true);
+    // } catch (protError) {
+    //   logAction(
+    //     "Set Protection",
+    //     sheetName,
+    //     "",
+    //     "",
+    //     "",
+    //     "Failed",
+    //     "Unable to protect sheet range. " + protError.message,
+    //     "ERROR"
+    //   );
+    // }
 
     // Notify user that the sheet is ready
-    ui.alert(
-      "Account Details Sheet Ready",
-      "This is a read-only sheet showing all accounts.",
-      ui.ButtonSet.OK
-    );
+    // ui.alert(
+    //   "Account Details Sheet Ready",
+    //   "This is a read-only sheet showing all accounts.",
+    //   ui.ButtonSet.OK
+    // );
 
     logAction(
       "Create Sheet",
