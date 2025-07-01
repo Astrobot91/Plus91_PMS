@@ -210,45 +210,45 @@ function viewClients() {
     }
 
     // 7) Make all data rows read-only by protecting them
-    try {
-      const protectionRange = sheet.getRange(
-        startRow,
-        1,
-        sheet.getMaxRows() - 2,
-        headers.length
-      );
-      const protection = protectionRange.protect();
-      protection.setDescription("Protected range for read-only sheet");
+    // try {
+    //   const protectionRange = sheet.getRange(
+    //     startRow,
+    //     1,
+    //     sheet.getMaxRows() - 2,
+    //     headers.length
+    //   );
+    //   const protection = protectionRange.protect();
+    //   protection.setDescription("Protected range for read-only sheet");
 
-      if (protection.canDomainEdit()) {
-        protection.setDomainEdit(false);
-      }
+    //   if (protection.canDomainEdit()) {
+    //     protection.setDomainEdit(false);
+    //   }
 
-      // Remove existing editors to ensure it's fully read-only
-      const editors = protection.getEditors();
-      if (editors && editors.length > 0) {
-        protection.removeEditors(editors);
-      }
-    } catch (protError) {
-      // We'll log the protection error, but not throw
-      logAction(
-        "Set Protection",
-        "Client Details",
-        "",
-        "",
-        "",
-        "Failed",
-        "Unable to protect sheet range. " + protError.message,
-        "ERROR"
-      );
-    }
+    //   // Remove existing editors to ensure it's fully read-only
+    //   const editors = protection.getEditors();
+    //   if (editors && editors.length > 0) {
+    //     protection.removeEditors(editors);
+    //   }
+    // } catch (protError) {
+    //   // We'll log the protection error, but not throw
+    //   logAction(
+    //     "Set Protection",
+    //     "Client Details",
+    //     "",
+    //     "",
+    //     "",
+    //     "Failed",
+    //     "Unable to protect sheet range. " + protError.message,
+    //     "ERROR"
+    //   );
+    // }
 
     // Notify user that the sheet is ready
-    ui.alert(
-      "Client Details Sheet Ready",
-      "This is a read-only sheet showing all clients.",
-      ui.ButtonSet.OK
-    );
+    // ui.alert(
+    //   "Client Details Sheet Ready",
+    //   "This is a read-only sheet showing all clients.",
+    //   ui.ButtonSet.OK
+    // );
 
     logAction(
       "Create Sheet",
@@ -803,6 +803,15 @@ function updateClients() {
 }
 
 function updateClientsSave() {
+
+  function updatedFormatDate(date) {
+    if (date instanceof Date && !isNaN(date)) {
+      return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    } else {
+      return "";
+    }
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetName = "Update Clients";
   const sheet = ss.getSheetByName(sheetName);
@@ -841,6 +850,12 @@ function updateClientsSave() {
   data.forEach((row, idx) => {
     if (row[0] === true) { // the checkbox in column A
       // Build a payload object
+
+      let formattedDate = "";
+      if (row[11]) {
+        formattedDate = updatedFormatDate(row[11]); 
+      }
+
       const updatePayload = {
         client_id: row[1],              // B
         client_name: row[2],           // C
@@ -852,7 +867,7 @@ function updateClientsSave() {
         phone_no: row[8] ? String(row[8]) : "",
         email_id: row[9],
         addr: row[10],
-        acc_start_date: row[11],
+        acc_start_date: formattedDate,
         alias_name: row[12],
         alias_phone_no: row[13] ? String(row[13]) : "",
         alias_addr: row[14],
@@ -1239,4 +1254,3 @@ function deleteClientsSave() {
     ss.toast("Client deletion failed: " + error.message, "Error", 5);
   }
 }
-
